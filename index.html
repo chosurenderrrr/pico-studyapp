@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>pico-studyapp</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #4285f4; --primary-d: #3367d6;
+      --success: #2ecc71; --danger: #e74c3c; --warning: #f39c12;
+      --bg: #f0f2f5; --card: #fff; --text: #1a1a2e; --muted: #6c757d; --border: #e0e0e0;
+      --r: 14px; --shadow: 0 2px 12px rgba(0,0,0,.08); --nav: 60px;
+    }
+    body { font-family: -apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent; }
+    #app { max-width:480px; margin:0 auto; min-height:100vh; }
+    .page { padding:16px; padding-bottom:calc(var(--nav) + 24px); }
+    .page-header { display:flex; align-items:center; gap:10px; padding:14px 16px; background:var(--card); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+    .page-title { font-size:17px; font-weight:600; flex:1; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:12px 18px; border-radius:var(--r); border:none; font-size:15px; font-weight:500; cursor:pointer; min-height:44px; transition:opacity .15s,transform .1s; -webkit-appearance:none; appearance:none; }
+    .btn:active { opacity:.75; transform:scale(.97); }
+    .btn:disabled { opacity:.4; pointer-events:none; }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-danger  { background:var(--danger);  color:#fff; }
+    .btn-outline { background:transparent; border:1.5px solid var(--border); color:var(--text); }
+    .btn-block { width:100%; }
+    .btn-sm { padding:8px 12px; font-size:13px; min-height:36px; }
+    .card { background:var(--card); border-radius:var(--r); box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
+    .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; height:var(--nav); background:var(--card); border-top:1px solid var(--border); display:flex; z-index:100; }
+    .bottom-nav button { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:none; background:transparent; font-size:9px; color:var(--muted); cursor:pointer; gap:2px; }
+    .bottom-nav button.active { color:var(--primary); }
+    .bottom-nav svg { width:22px; height:22px; }
+    .loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:60px 24px; color:var(--muted); font-size:14px; }
+    .spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .toast { position:fixed; bottom:calc(var(--nav) + 16px); left:50%; transform:translateX(-50%) translateY(8px); background:rgba(20,20,20,.88); color:#fff; padding:10px 22px; border-radius:22px; font-size:14px; z-index:3000; white-space:nowrap; animation:toastAnim 2.8s ease forwards; pointer-events:none; }
+    @keyframes toastAnim { 0%{opacity:0;transform:translateX(-50%) translateY(12px)} 12%{opacity:1;transform:translateX(-50%) translateY(0)} 72%{opacity:1} 100%{opacity:0} }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:flex-end; z-index:1000; animation:fadeIn .2s ease; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    .modal-sheet { background:var(--card); border-radius:var(--r) var(--r) 0 0; padding:24px 20px 32px; width:100%; max-width:480px; margin:0 auto; animation:slideUp .25s ease; max-height:92vh; overflow-y:auto; }
+    @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:none;opacity:1} }
+    .modal-title { font-size:17px; font-weight:600; margin-bottom:16px; }
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:13px; font-weight:500; color:var(--muted); margin-bottom:6px; }
+    .form-input { width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:var(--r); font-size:15px; background:var(--card); color:var(--text); -webkit-appearance:none; appearance:none; }
+    .form-input:focus { outline:none; border-color:var(--primary); }
+    select.form-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%236c757d'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:36px; }
+    .progress-bar { width:100%; height:4px; background:var(--border); }
+    .progress-fill { height:100%; background:var(--primary); transition:width .3s; }
+    .quiz-q-wrap { background:var(--card); border-radius:var(--r); box-shadow:var(--shadow); padding:20px; margin-bottom:16px; }
+    .quiz-q-text { font-size:18px; font-weight:500; line-height:1.6; }
+    .quiz-q-img  { width:100%; max-height:280px; object-fit:contain; border-radius:8px; display:block; }
+    .choices { display:flex; flex-direction:column; gap:10px; }
+    .choice-btn { width:100%; padding:16px; border-radius:var(--r); border:2px solid var(--border); background:var(--card); font-size:15px; text-align:left; cursor:pointer; min-height:56px; transition:all .15s; line-height:1.4; -webkit-appearance:none; appearance:none; }
+    .choice-btn img { width:100%; max-height:140px; object-fit:contain; border-radius:6px; display:block; }
+    .choice-btn:active { transform:scale(.98); }
+    .choice-btn.correct { border-color:var(--success); background:#eafaf1; }
+    .choice-btn.wrong   { border-color:var(--danger);  background:#fdf0ef; }
+    .choice-btn.locked  { pointer-events:none; }
+    .score-circle { width:130px; height:130px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--primary-d)); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; margin:24px auto; box-shadow:0 4px 20px rgba(66,133,244,.35); }
+    .score-num { font-size:38px; font-weight:700; line-height:1; }
+    .score-sub { font-size:13px; margin-top:4px; opacity:.85; }
+    .result-list { list-style:none; }
+    .result-item { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); font-size:14px; }
+    .stats-section { margin-bottom:28px; }
+    .stats-section h3 { font-size:13px; font-weight:600; margin-bottom:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .stat-row { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .stat-id { min-width:40px; font-weight:600; }
+    .stat-bar-wrap { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+    .stat-bar-fill { height:100%; border-radius:4px; }
+    .stat-pct { min-width:36px; text-align:right; font-weight:600; }
+    .stat-cnt { min-width:32px; text-align:right; color:var(--muted); font-size:11px; }
+    .cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .cal-month  { font-size:17px; font-weight:600; }
+    .cal-grid   { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .cal-weekday { text-align:center; font-size:11px; color:var(--muted); padding:4px 0; }
+    .cal-day { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:10px; font-size:13px; cursor:pointer; gap:2px; }
+    .cal-day.today { background:var(--primary); color:#fff; font-weight:700; }
+    .cal-day.has-log { font-weight:600; }
+    .cal-study-min { font-size:9px; color:var(--primary); line-height:1; }
+    .cal-day.today .cal-study-min { color:rgba(255,255,255,.8); }
+    .cal-dots { display:flex; gap:2px; justify-content:center; }
+    .cal-dot { width:5px; height:5px; border-radius:50%; }
+    .upload-area { border:2px dashed var(--border); border-radius:var(--r); padding:20px; text-align:center; cursor:pointer; color:var(--muted); font-size:14px; }
+    .upload-area.has-file { border-color:var(--success); color:var(--text); font-weight:500; }
+    .mode-option { display:flex; align-items:center; gap:12px; padding:14px 12px; border-radius:var(--r); border:2px solid var(--border); margin-bottom:10px; cursor:pointer; }
+    .mode-option.selected { border-color:var(--primary); background:#eef3fe; }
+    .mode-icon { font-size:26px; flex-shrink:0; }
+    .mode-label { font-size:15px; font-weight:500; }
+    .mode-desc  { font-size:12px; color:var(--muted); margin-top:2px; }
+    input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:2px; background:var(--border); outline:none; margin:8px 0; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:var(--primary); cursor:pointer; }
+    .empty { text-align:center; padding:48px 24px; color:var(--muted); }
+    .empty-icon { font-size:48px; margin-bottom:12px; }
+    .empty-title { font-size:16px; font-weight:600; margin-bottom:8px; color:var(--text); }
+    .empty-desc { font-size:13px; line-height:1.6; }
+    .set-card { background:var(--card); border-radius:var(--r); box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
+    .set-name { font-size:17px; font-weight:600; margin-bottom:4px; }
+    .set-meta { font-size:13px; color:var(--muted); margin-bottom:10px; }
+    .diff-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .diff-badge { font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; flex-shrink:0; }
+    .diff-badge.drive { background:#eef3fe; color:var(--primary); }
+    .diff-badge.local { background:#f0fff4; color:#27ae60; }
+    .setup-hero { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:40px 24px; gap:20px; text-align:center; }
+    .setup-hero .logo { font-size:72px; }
+    .setup-hero h1 { font-size:26px; font-weight:700; }
+    .setup-hero p { font-size:14px; color:var(--muted); line-height:1.7; max-width:300px; }
+    .warn-box { background:#fff3cd; border:1px solid #ffc107; border-radius:var(--r); padding:12px 14px; font-size:13px; color:#856404; margin-bottom:16px; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+
+// ============================================================
+// IDB — IndexedDB ラッパー（フォルダハンドル永続化）
+// ============================================================
+const idb = (() => {
+  let _db;
+  function _open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('psa_v1', 1);
+      r.onupgradeneeded = e => e.target.result.createObjectStore('kv');
+      r.onsuccess = e => { _db = e.target.result; res(_db); };
+      r.onerror = rej;
+    });
+  }
+  async function get(key) {
+    const db = await _open();
+    return new Promise((res, rej) => {
+      const r = db.transaction('kv').objectStore('kv').get(key);
+      r.onsuccess = () => res(r.result ?? null);
+      r.onerror = rej;
+    });
+  }
+  async function set(key, val) {
+    const db = await _open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(val, key);
+      tx.oncomplete = res; tx.onerror = rej;
+    });
+  }
+  return { get, set };
+})();
+
+// ============================================================
+// LOCAL FS — File System Access API ラッパー
+// ============================================================
+const localFS = (() => {
+  let root = null;
+  let dataDir = null;
+
+  async function tryRestoreHandle() {
+    const h = await idb.get('ws_handle');
+    if (!h) return null;
+    try {
+      const perm = await h.queryPermission({ mode: 'readwrite' });
+      if (perm === 'granted') { root = h; return 'ok'; }
+      root = h;
+      return 'needs-permission';
+    } catch { return null; }
+  }
+
+  async function requestPermission() {
+    if (!root) return false;
+    const p = await root.requestPermission({ mode: 'readwrite' });
+    return p === 'granted';
+  }
+
+  async function pickFolder() {
+    root = await showDirectoryPicker({ mode: 'readwrite', id: 'pico-studyapp' });
+    await idb.set('ws_handle', root);
+    return root;
+  }
+
+  async function initDataDir() {
+    if (!root) throw new Error('ワークスペース未設定');
+    dataDir = await root.getDirectoryHandle('data', { create: true });
+    return dataDir;
+  }
+
+  async function listDirs(handle) {
+    const r = [];
+    for await (const [name, e] of handle.entries())
+      if (e.kind === 'directory') r.push({ name, handle: e });
+    return r.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async function listAll(handle) {
+    const r = [];
+    for await (const [name, e] of handle.entries())
+      r.push({ name, kind: e.kind, handle: e });
+    return r;
+  }
+
+  async function readText(dirHandle, name) {
+    return (await (await dirHandle.getFileHandle(name)).getFile()).text();
+  }
+
+  async function readBlob(dirHandle, name) {
+    const f = await (await dirHandle.getFileHandle(name)).getFile();
+    return URL.createObjectURL(f);
+  }
+
+  async function readJSON(name, def = null) {
+    if (!dataDir) return def;
+    try {
+      const f = await (await dataDir.getFileHandle(name)).getFile();
+      return JSON.parse(await f.text());
+    } catch { return def; }
+  }
+
+  async function writeJSON(name, data) {
+    if (!dataDir) throw new Error('dataDir 未初期化');
+    const w = await (await dataDir.getFileHandle(name, { create: true })).createWritable();
+    await w.write(JSON.stringify(data, null, 2)); await w.close();
+  }
+
+  async function writeFile(dirHandle, name, data) {
+    const w = await (await dirHandle.getFileHandle(name, { create: true })).createWritable();
+    await w.write(data); await w.close();
+  }
+
+  async function createDir(parent, name) {
+    return parent.getDirectoryHandle(name, { create: true });
+  }
+
+  async function removeEntry(parent, name) {
+    await parent.removeEntry(name, { recursive: true });
+  }
+
+  return {
+    tryRestoreHandle, requestPermission, pickFolder, initDataDir,
+    listDirs, listAll, readText, readBlob, readJSON, writeJSON, writeFile, createDir, removeEntry,
+    get root() { return root; },
+  };
+})();
+
+// ============================================================
+// DRIVE API — 読み取り専用（APIキー使用）
+// ============================================================
+const driveAPI = (() => {
+  const V3 = 'https://www.googleapis.com/drive/v3';
+  const key = () => localStorage.getItem('psa_api_key') ?? '';
+  const fid = () => localStorage.getItem('psa_drive_folder') ?? '';
+  const isConfigured = () => !!(key() && fid());
+
+  async function _json(url) {
+    const sep = url.includes('?') ? '&' : '?';
+    const r = await fetch(url + sep + 'key=' + encodeURIComponent(key()));
+    if (!r.ok) throw new Error(`Drive API ${r.status}: ${(await r.json())?.error?.message ?? ''}`);
+    return r.json();
+  }
+
+  async function listChildren(parentId) {
+    const q = `'${parentId}' in parents and trashed=false`;
+    const d = await _json(
+      `${V3}/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&orderBy=name&pageSize=200`
+    );
+    return d.files ?? [];
+  }
+
+  async function downloadBlob(fileId) {
+    const r = await fetch(`${V3}/files/${fileId}?alt=media&key=${encodeURIComponent(key())}`);
+    if (!r.ok) throw new Error(`Drive download ${r.status}`);
+    return r.blob();
+  }
+
+  return { isConfigured, key, fid, listChildren, downloadBlob };
+})();
+
+// ============================================================
+// SYNC ENGINE — Drive ↔ ローカル 差分・ダウンロード
+// ============================================================
+const syncEngine = (() => {
+  const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+  async function getDiff() {
+    const driveList = await driveAPI.listChildren(driveAPI.fid());
+    const driveSets = driveList.filter(c => c.mimeType === FOLDER_MIME && c.name !== 'data');
+    const localDirs = await localFS.listDirs(localFS.root);
+    const localSets = localDirs.filter(d => d.name !== 'data');
+    const driveNames = new Set(driveSets.map(s => s.name));
+    const localNames = new Set(localSets.map(s => s.name));
+    return {
+      onlyInDrive: driveSets.filter(s => !localNames.has(s.name)),
+      onlyInLocal:  localSets.filter(s => !driveNames.has(s.name)),
+      both: driveSets.filter(s => localNames.has(s.name)),
+    };
+  }
+
+  async function downloadQuizSet(item, onProgress) {
+    const setDir = await localFS.createDir(localFS.root, item.name);
+    const qFolders = await driveAPI.listChildren(item.id);
+    let done = 0;
+    for (const qf of qFolders) {
+      if (qf.mimeType !== FOLDER_MIME) continue;
+      const qDir = await localFS.createDir(setDir, qf.name);
+      const files = await driveAPI.listChildren(qf.id);
+      for (const f of files) {
+        if (f.mimeType === FOLDER_MIME) continue;
+        const blob = await driveAPI.downloadBlob(f.id);
+        await localFS.writeFile(qDir, f.name, blob);
+      }
+      done++;
+      if (onProgress) onProgress(done, qFolders.length);
+    }
+  }
+
+  return { getDiff, downloadQuizSet };
+})();
+
+// ============================================================
+// STORE
+// ============================================================
+const store = (() => {
+  const s = {
+    view: 'loading',
+    quizSets: [],
+    currentSet: null,
+    questions: [],
+    currentQIdx: 0,
+    sessionAnswers: [],
+    mode: 'normal',
+    weakThreshold: 0.6,
+    studyLog: null,
+    quizStats: null,
+    calData: null,
+    calYear: new Date().getFullYear(),
+    calMonth: new Date().getMonth(),
+    blobUrls: [],
+  };
+  const ls = [];
+  function set(p) { Object.assign(s, p); ls.forEach(f => f(s)); }
+  function get() { return s; }
+  function trackBlob(u) { s.blobUrls.push(u); return u; }
+  function revokeBlobs() { s.blobUrls.forEach(u => URL.revokeObjectURL(u)); s.blobUrls = []; }
+  return { set, get, trackBlob, revokeBlobs };
+})();
+
+// ============================================================
+// TIMER
+// ============================================================
+const timer = (() => {
+  let _s = 0, _q = 0;
+  function startSession() { _s = Date.now(); _buf(); }
+  function startQ() { _q = Date.now(); }
+  function endQ() { return (Date.now() - _q) / 1000; }
+  function endSession() { const d = Math.round((Date.now() - _s) / 1000); localStorage.removeItem('tmr'); return d; }
+  function _buf() { if (_s) localStorage.setItem('tmr', JSON.stringify({ s: _s, set: store.get().currentSet?.name })); }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _buf(); });
+  return { startSession, startQ, endQ, endSession };
+})();
+
+// ============================================================
+// STATS ENGINE
+// ============================================================
+const statsEngine = (() => {
+  async function save(durationSec, correct, total) {
+    const { currentSet, sessionAnswers, mode } = store.get();
+    if (!currentSet) return;
+    const id = crypto.randomUUID();
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+
+    const log = await localFS.readJSON('study-log.json', { version: 1, sessions: [], dailySummary: {} });
+    log.sessions.push({ sessionId: id, date, endTime: now.toISOString(), durationSeconds: durationSec, quizSetName: currentSet.name, mode, questionCount: total, correctCount: correct });
+    if (!log.dailySummary[date]) log.dailySummary[date] = { totalSeconds: 0, sessionIds: [] };
+    log.dailySummary[date].totalSeconds += durationSec;
+    log.dailySummary[date].sessionIds.push(id);
+    await localFS.writeJSON('study-log.json', log);
+    store.set({ studyLog: log });
+
+    const qs = await localFS.readJSON('quiz-stats.json', { version: 1, quizSets: {} });
+    if (!qs.quizSets[currentSet.name]) qs.quizSets[currentSet.name] = { questions: {}, sessionScores: [] };
+    const sq = qs.quizSets[currentSet.name];
+    sessionAnswers.forEach(({ questionId, correct: ok, elapsedSec }) => {
+      const e = sq.questions[questionId] ??= { totalAttempts: 0, correctAttempts: 0, correctRate: 0, lastAttemptDate: date, lastResult: '', history: [] };
+      e.totalAttempts++; if (ok) e.correctAttempts++;
+      e.correctRate = e.correctAttempts / e.totalAttempts;
+      e.lastAttemptDate = date; e.lastResult = ok ? 'correct' : 'wrong';
+      e.history.push({ sessionId: id, date, result: e.lastResult, elapsedSeconds: elapsedSec });
+      if (e.history.length > 100) e.history = e.history.slice(-100);
+    });
+    sq.sessionScores.push({ sessionId: id, date, score: correct, total });
+    await localFS.writeJSON('quiz-stats.json', qs);
+    store.set({ quizStats: qs });
+  }
+  return { save };
+})();
+
+// ============================================================
+// QUIZ LOGIC
+// ============================================================
+const quizLogic = (() => {
+  function shuffle(a) {
+    const b = [...a];
+    for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
+    return b;
+  }
+  function filter(all, mode, name, qs, thr) {
+    if (mode === 'weak')       return all.filter(q => { const s = qs?.quizSets?.[name]?.questions?.[q.id]; return !s || s.correctRate <= thr; });
+    if (mode === 'wrong_last') return all.filter(q => qs?.quizSets?.[name]?.questions?.[q.id]?.lastResult === 'wrong');
+    return all;
+  }
+  async function loadQuestions(setHandle) {
+    const dirs = await localFS.listDirs(setHandle);
+    const qs = [];
+    for (const { name, handle } of dirs) {
+      const files = await localFS.listAll(handle);
+      const find = pre => files.find(f => f.kind === 'file' && f.name.toLowerCase().startsWith(pre.toLowerCase()));
+      const qFile = find('question'), cFile = find('correct');
+      const wFiles = files.filter(f => f.kind === 'file' && f.name.toLowerCase().startsWith('wrong'));
+      if (qFile && cFile) qs.push({ id: name, dirHandle: handle, qFile, cFile, wFiles });
+    }
+    return qs;
+  }
+  return { shuffle, filter, loadQuestions };
+})();
+
+// ============================================================
+// CHART
+// ============================================================
+const chart = (() => {
+  function _setup(c) {
+    const dpr = devicePixelRatio || 1, r = c.getBoundingClientRect();
+    c.width = r.width * dpr; c.height = r.height * dpr;
+    const ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return { ctx, W: r.width, H: r.height };
+  }
+  function bar(c, { labels, values, unit = '', color = '#4285f4' }) {
+    const { ctx, W, H } = _setup(c);
+    const p = { t:10, r:10, b:28, l:38 };
+    const cw = W-p.l-p.r, ch = H-p.t-p.b, max = Math.max(...values, 1);
+    const gap = cw / labels.length, bw = Math.max(2, gap * .65);
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#f0f2f5'; ctx.fillRect(p.l,p.t,cw,ch);
+    values.forEach((v,i) => {
+      const x = p.l+i*gap+(gap-bw)/2, bh=(v/max)*ch, y=p.t+ch-bh;
+      ctx.fillStyle=color; ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x,y,bw,bh,[3,3,0,0]); else ctx.rect(x,y,bw,bh);
+      ctx.fill();
+    });
+    ctx.fillStyle='#aaa'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+    const step=Math.ceil(labels.length/6);
+    labels.forEach((l,i)=>{ if(i%step===0||i===labels.length-1) ctx.fillText(l.slice(5),p.l+i*gap+gap/2,H-6); });
+    ctx.textAlign='right';
+    [0,.5,1].forEach(r=>{ ctx.fillText(Math.round(max*r)+unit, p.l-5, p.t+ch-r*ch+4); });
+  }
+  function line(c, { labels, datasets }) {
+    const { ctx, W, H } = _setup(c);
+    const p = { t:16, r:16, b:28, l:32 };
+    const cw=W-p.l-p.r, ch=H-p.t-p.b, max=Math.max(...datasets.flatMap(d=>d.values),1);
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#f0f2f5'; ctx.fillRect(p.l,p.t,cw,ch);
+    datasets.forEach(({ values, color }) => {
+      if (values.length < 2) return;
+      const pts = values.map((v,i)=>({ x:p.l+(i/(labels.length-1))*cw, y:p.t+(1-v/max)*ch }));
+      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.lineJoin='round';
+      ctx.beginPath(); pts.forEach((pt,i)=>i===0?ctx.moveTo(pt.x,pt.y):ctx.lineTo(pt.x,pt.y)); ctx.stroke();
+      pts.forEach(pt=>{ ctx.beginPath(); ctx.arc(pt.x,pt.y,4,0,Math.PI*2); ctx.fillStyle=color; ctx.fill(); });
+    });
+    ctx.fillStyle='#aaa'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+    const step=Math.ceil(labels.length/5);
+    labels.forEach((l,i)=>{ if(i%step===0||i===labels.length-1){ const x=p.l+(i/Math.max(labels.length-1,1))*cw; ctx.fillText(l.slice(5)??l,x,H-6); } });
+  }
+  return { bar, line };
+})();
+
+// ============================================================
+// DOM HELPERS
+// ============================================================
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'cls') e.className = v;
+    else if (k === 'css') Object.assign(e.style, v);
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  kids.flat(Infinity).forEach(c => { if (c == null || c === false) return; e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+  return e;
+}
+
+function toast(msg) {
+  const t = h('div', { cls: 'toast' }, msg);
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function modal(buildFn) {
+  const ov = h('div', { cls: 'modal-overlay', onclick: e => { if (e.target === ov) ov.remove(); } });
+  const sheet = h('div', { cls: 'modal-sheet' });
+  buildFn(sheet, () => ov.remove());
+  ov.appendChild(sheet);
+  document.body.appendChild(ov);
+  return ov;
+}
+
+function loading(msg = '読み込み中...') {
+  return h('div', { cls: 'loading' }, h('div', { cls: 'spinner' }), msg);
+}
+
+const isImg = name => /\.(png|jpg|jpeg|gif|webp)$/i.test(name);
+
+// ============================================================
+// BOTTOM NAV
+// ============================================================
+function bottomNav(active) {
+  const items = [
+    { key: 'home',     label: 'ホーム',    d: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z' },
+    { key: 'stats',    label: '振り返り',  d: 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z' },
+    { key: 'calendar', label: 'カレンダー', d: 'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z' },
+    { key: 'create',   label: '作成',      d: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z' },
+    { key: 'sync',     label: 'Drive同期', d: 'M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z' },
+  ];
+  const nav = h('nav', { cls: 'bottom-nav' });
+  items.forEach(({ key, label, d }) => {
+    const btn = h('button', { cls: active === key ? 'active' : '', onclick: () => app.go(key) });
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="${d}"/></svg>${label}`;
+    nav.appendChild(btn);
+  });
+  return nav;
+}
+
+// ============================================================
+// VIEW: SETUP（初回フォルダ選択）
+// ============================================================
+function viewSetup(reason) {
+  const root = h('div', { cls: 'setup-hero' },
+    h('div', { cls: 'logo' }, '📚'),
+    h('h1', {}, 'pico-studyapp'),
+    h('p', {}, 'デバイス上のフォルダにクイズデータを置いて\nどこでも学習できます'),
+  );
+  if (reason === 'needs-permission') {
+    root.appendChild(h('div', { cls: 'warn-box' }, '⚠️ フォルダへのアクセス許可が必要です'));
+    root.appendChild(h('button', { cls: 'btn btn-primary', css: { width: '100%', maxWidth: '300px' },
+      onclick: async function() {
+        this.disabled = true; this.textContent = '許可中...';
+        const ok = await localFS.requestPermission();
+        if (ok) await app.setup();
+        else { this.disabled = false; this.textContent = 'アクセスを許可する'; toast('許可が必要です'); }
+      }
+    }, 'アクセスを許可する'));
+  } else {
+    root.appendChild(h('button', { cls: 'btn btn-primary', css: { width: '100%', maxWidth: '300px' },
+      onclick: async function() {
+        this.disabled = true; this.textContent = '選択中...';
+        try {
+          await localFS.pickFolder();
+          await app.setup();
+        } catch (e) {
+          this.disabled = false; this.textContent = 'フォルダを選択';
+          if (e.name !== 'AbortError') toast('エラー: ' + e.message);
+        }
+      }
+    }, 'ワークスペースフォルダを選択'));
+  }
+  return root;
+}
+
+// ============================================================
+// VIEW: HOME
+// ============================================================
+async function viewHome() {
+  const page = h('div', {},
+    h('div', { cls: 'page-header' },
+      h('div', { cls: 'page-title' }, '📚 ' + (localFS.root?.name ?? 'pico-studyapp')),
+      h('button', { cls: 'btn btn-outline btn-sm', css: { marginLeft: 'auto' },
+        onclick: async () => {
+          try {
+            await localFS.pickFolder();
+            await app.setup();
+          } catch(e) { if (e.name !== 'AbortError') toast('エラー: ' + e.message); }
+        }
+      }, '📂 変更'),
+    ),
+  );
+  const content = h('div', { cls: 'page' }, loading());
+  page.appendChild(content);
+  page.appendChild(bottomNav('home'));
+
+  (async () => {
+    try {
+      const localDirs = await localFS.listDirs(localFS.root);
+      const sets = localDirs.filter(d => d.name !== 'data');
+      store.set({ quizSets: sets });
+      const { quizStats } = store.get();
+      content.innerHTML = '';
+
+      if (sets.length === 0) {
+        content.appendChild(h('div', { cls: 'empty' },
+          h('div', { cls: 'empty-icon' }, '📂'),
+          h('div', { cls: 'empty-title' }, 'クイズセットがありません'),
+          h('div', { cls: 'empty-desc' }, `「${localFS.root?.name}」フォルダにクイズセット用のサブフォルダを追加するか、\n「作成」タブから問題を作成してください`),
+        ));
+        return;
+      }
+
+      for (const set of sets) {
+        const setStats = quizStats?.quizSets?.[set.name];
+        const last = setStats?.sessionScores?.slice(-1)[0];
+        content.appendChild(h('div', { cls: 'set-card' },
+          h('div', { cls: 'set-name' }, set.name),
+          h('div', { cls: 'set-meta' }, last ? `最終: ${last.score}/${last.total} (${Math.round(last.score/last.total*100)}%)` : '未挑戦'),
+          h('div', { cls: 'set-actions', css: { display:'flex', gap:'8px' } },
+            h('button', { cls: 'btn btn-primary', css: { flex:'1' },
+              onclick: () => showModeModal(set)
+            }, '解答する'),
+          ),
+        ));
+      }
+    } catch (e) {
+      content.innerHTML = '';
+      content.appendChild(h('div', { css: { color:'var(--danger)', padding:'16px' } }, '⚠️ ' + e.message));
+    }
+  })();
+  return page;
+}
+
+function showModeModal(set) {
+  const { quizStats } = store.get();
+  const setStats = quizStats?.quizSets?.[set.name];
+  let mode = 'normal', thr = store.get().weakThreshold;
+  const countWeak = t => setStats ? Object.values(setStats.questions).filter(q => q.correctRate <= t).length : 0;
+  const countWrong = () => setStats ? Object.values(setStats.questions).filter(q => q.lastResult === 'wrong').length : 0;
+
+  modal((sheet, close) => {
+    sheet.appendChild(h('div', { cls: 'modal-title' }, `モード選択 — ${set.name}`));
+    const modes = [
+      { key:'normal',     icon:'📖', label:'通常モード',     desc:'すべての問題をランダムに出題' },
+      { key:'weak',       icon:'💪', label:'苦手対策モード', desc:'正答率が低い問題を重点的に' },
+      { key:'wrong_last', icon:'🔁', label:'前回誤答モード', desc:'前回間違えた問題のみ出題' },
+    ];
+    const modeEls = {};
+    modes.forEach(m => {
+      const opt = h('div', { cls: 'mode-option' + (m.key==='normal' ? ' selected' : ''),
+        onclick: () => { mode=m.key; Object.values(modeEls).forEach(e=>e.classList.remove('selected')); opt.classList.add('selected'); refresh(); }
+      }, h('span',{cls:'mode-icon'},m.icon), h('div',{}, h('div',{cls:'mode-label'},m.label), h('div',{cls:'mode-desc'},m.desc)));
+      modeEls[m.key] = opt; sheet.appendChild(opt);
+    });
+    const weakOpts = h('div', { css:{display:'none',margin:'8px 0'} });
+    const thrLabel = h('div', { cls:'form-label' }, `閾値: ${Math.round(thr*100)}%`);
+    const slider = h('input',{type:'range',min:'0',max:'100',value:String(Math.round(thr*100)),
+      oninput(e){thr=e.target.value/100; thrLabel.textContent=`閾値: ${e.target.value}%`; refresh();}});
+    weakOpts.appendChild(thrLabel); weakOpts.appendChild(slider);
+    sheet.appendChild(weakOpts);
+    const countEl = h('div', { css:{fontSize:'13px',minHeight:'18px',margin:'4px 0'} });
+    sheet.appendChild(countEl);
+    const startBtn = h('button', { cls:'btn btn-primary btn-block', css:{marginTop:'16px'},
+      onclick: () => {
+        close();
+        store.set({ currentSet: set, mode, weakThreshold: thr, sessionAnswers:[], currentQIdx:0 });
+        store.revokeBlobs();
+        app.render('quiz-loading');
+      }
+    }, '開始する');
+    sheet.appendChild(startBtn);
+    function refresh() {
+      weakOpts.style.display = mode==='weak' ? 'block' : 'none';
+      const cnt = mode==='weak' ? countWeak(thr) : mode==='wrong_last' ? countWrong() : undefined;
+      if (cnt===undefined) { countEl.textContent=''; startBtn.disabled=false; return; }
+      countEl.textContent = `対象: ${cnt}問`;
+      countEl.style.color = cnt===0 ? 'var(--danger)' : 'var(--muted)';
+      if (cnt===0) countEl.textContent += '　⚠️ 対象なし';
+      startBtn.disabled = cnt===0;
+    }
+    refresh();
+  });
+}
+
+// ============================================================
+// VIEW: QUIZ LOADING
+// ============================================================
+async function viewQuizLoading() {
+  const { currentSet } = store.get();
+  const page = h('div', {},
+    h('div',{cls:'page-header'},
+      h('button',{cls:'btn btn-outline btn-sm',onclick:()=>app.go('home')},'← 戻る'),
+      h('div',{cls:'page-title'},currentSet?.name??''),
+    ),
+    loading('問題を読み込み中...'),
+  );
+  (async () => {
+    try {
+      const { currentSet: set, mode, weakThreshold, quizStats } = store.get();
+      let qs = await quizLogic.loadQuestions(set.handle);
+      qs = quizLogic.filter(qs, mode, set.name, quizStats, weakThreshold);
+      qs = quizLogic.shuffle(qs);
+      if (!qs.length) { toast('対象問題がありません'); app.go('home'); return; }
+      store.set({ questions: qs, currentQIdx: 0, sessionAnswers: [] });
+      timer.startSession();
+      app.render('quiz');
+    } catch (e) { toast('エラー: ' + e.message); app.go('home'); }
+  })();
+  return page;
+}
+
+// ============================================================
+// VIEW: QUIZ
+// ============================================================
+async function viewQuiz() {
+  const { questions, currentQIdx } = store.get();
+  const q = questions[currentQIdx];
+  const total = questions.length;
+  const progress = h('div',{cls:'progress-bar'}, h('div',{cls:'progress-fill',css:{width:`${(currentQIdx/total)*100}%`}}));
+  const content = h('div',{cls:'page'}, loading('問題を読み込み中...'));
+  const page = h('div', {},
+    h('div',{cls:'page-header'},
+      h('button',{cls:'btn btn-outline btn-sm',onclick:()=>{if(confirm('中断しますか？'))app.go('home');}},'中断'),
+      h('div',{cls:'page-title',css:{textAlign:'center'}},`${currentQIdx+1} / ${total}`),
+      h('div',{css:{width:'60px'}}),
+    ),
+    progress, content,
+  );
+  timer.startQ();
+  (async () => {
+    try {
+      let qEl;
+      if (isImg(q.qFile.name)) {
+        const url = store.trackBlob(await localFS.readBlob(q.dirHandle, q.qFile.name));
+        qEl = h('div',{cls:'quiz-q-wrap'}, h('img',{cls:'quiz-q-img',src:url,alt:'問題'}));
+      } else {
+        const txt = await localFS.readText(q.dirHandle, q.qFile.name);
+        qEl = h('div',{cls:'quiz-q-wrap'}, h('div',{cls:'quiz-q-text'},txt.trim()));
+      }
+      const raw = [{file:q.cFile,ok:true}, ...q.wFiles.map(f=>({file:f,ok:false}))];
+      const choices = quizLogic.shuffle(raw);
+      const choicesEl = h('div',{cls:'choices'});
+      let answered = false;
+      for (const c of choices) {
+        const btn = h('button',{cls:'choice-btn'});
+        if (isImg(c.file.name)) {
+          const url = store.trackBlob(await localFS.readBlob(q.dirHandle, c.file.name));
+          btn.appendChild(h('img',{src:url,alt:'選択肢'}));
+        } else {
+          btn.textContent = (await localFS.readText(q.dirHandle, c.file.name)).trim();
+        }
+        btn.addEventListener('click', () => {
+          if (answered) return; answered = true;
+          const elapsedSec = timer.endQ();
+          choices.forEach((ch,i) => {
+            const b = choicesEl.children[i]; b.classList.add('locked');
+            if (ch.ok) b.classList.add('correct');
+            else if (b===btn && !c.ok) b.classList.add('wrong');
+          });
+          const { sessionAnswers } = store.get();
+          store.set({ sessionAnswers: [...sessionAnswers, { questionId: q.id, correct: c.ok, elapsedSec }] });
+          const isLast = currentQIdx+1 >= total;
+          content.appendChild(h('button',{cls:'btn btn-primary btn-block',css:{marginTop:'16px'},
+            onclick: () => {
+              if (isLast) app.render('result');
+              else { store.set({currentQIdx:currentQIdx+1}); app.render('quiz'); }
+            }
+          }, isLast ? '結果を見る' : '次へ →'));
+        });
+        choicesEl.appendChild(btn);
+      }
+      content.innerHTML = '';
+      content.appendChild(qEl);
+      content.appendChild(choicesEl);
+    } catch (e) {
+      content.innerHTML = '';
+      content.appendChild(h('div',{css:{color:'var(--danger)',padding:'16px'}},'⚠️ '+e.message));
+    }
+  })();
+  return page;
+}
+
+// ============================================================
+// VIEW: RESULT
+// ============================================================
+async function viewResult() {
+  const { sessionAnswers, questions } = store.get();
+  const correct = sessionAnswers.filter(a=>a.correct).length;
+  const total = sessionAnswers.length;
+  const pct = total ? Math.round(correct/total*100) : 0;
+  const dur = timer.endSession();
+  const list = h('ul',{cls:'result-list'});
+  sessionAnswers.forEach((a,i) => {
+    list.appendChild(h('li',{cls:'result-item'},
+      h('span',{},a.correct?'✅':'❌'),
+      h('span',{},`問題 ${questions[i]?.id??i+1}`),
+      h('span',{css:{marginLeft:'auto',color:'var(--muted)',fontSize:'12px'}},`${a.elapsedSec.toFixed(1)}秒`),
+    ));
+  });
+  const page = h('div', {},
+    h('div',{cls:'page-header'}, h('div',{cls:'page-title'},'結果')),
+    h('div',{cls:'page'},
+      h('div',{cls:'score-circle'}, h('div',{cls:'score-num'},`${pct}%`), h('div',{cls:'score-sub'},`${correct}/${total} 正解`)),
+      list,
+      h('div',{css:{display:'flex',gap:'12px',marginTop:'24px'}},
+        h('button',{cls:'btn btn-outline',css:{flex:'1'},onclick:()=>app.go('home')},'ホームへ'),
+        h('button',{cls:'btn btn-primary',css:{flex:'1'},onclick:()=>{
+          store.set({currentQIdx:0,sessionAnswers:[]}); store.revokeBlobs(); app.render('quiz-loading');
+        }},'もう一度'),
+      ),
+    ),
+    bottomNav('home'),
+  );
+  statsEngine.save(dur, correct, total).catch(e=>console.warn('stats save:', e));
+  return page;
+}
+
+// ============================================================
+// VIEW: STATS
+// ============================================================
+async function viewStats() {
+  const page = h('div', {}, h('div',{cls:'page-header'}, h('div',{cls:'page-title'},'振り返り')));
+  const content = h('div',{cls:'page'}, loading());
+  page.appendChild(content); page.appendChild(bottomNav('stats'));
+  (async () => {
+    try {
+      const [log, qs] = await Promise.all([
+        localFS.readJSON('study-log.json',  {version:1,sessions:[],dailySummary:{}}),
+        localFS.readJSON('quiz-stats.json', {version:1,quizSets:{}}),
+      ]);
+      store.set({ studyLog:log, quizStats:qs });
+      content.innerHTML = '';
+      const sec1 = h('div',{cls:'stats-section'}, h('h3',{},'日別勉強時間（過去30日）'));
+      const today = new Date();
+      const days = Array.from({length:30},(_,i)=>{ const d=new Date(today); d.setDate(today.getDate()-29+i); return d.toISOString().slice(0,10); });
+      const vals = days.map(d=>Math.round((log.dailySummary?.[d]?.totalSeconds??0)/60));
+      const bc = h('canvas',{css:{width:'100%',height:'160px',display:'block'}});
+      sec1.appendChild(bc); content.appendChild(sec1);
+      requestAnimationFrame(()=>chart.bar(bc,{labels:days,values:vals,unit:'分'}));
+
+      const setNames = Object.keys(qs.quizSets);
+      if (!setNames.length) { content.appendChild(h('div',{cls:'empty'}, h('div',{cls:'empty-icon'},'📊'), h('div',{cls:'empty-title'},'解答履歴がありません'))); return; }
+
+      const sec2 = h('div',{cls:'stats-section'}, h('h3',{},'問題別正答率'));
+      const sel = h('select',{cls:'form-input',css:{marginBottom:'12px'}});
+      setNames.forEach(n=>sel.appendChild(h('option',{value:n},n)));
+      sec2.appendChild(sel);
+      const tw = h('div',{}); sec2.appendChild(tw); content.appendChild(sec2);
+      const sec3 = h('div',{cls:'stats-section'}, h('h3',{},'スコア推移'));
+      const lc = h('canvas',{css:{width:'100%',height:'160px',display:'block'}});
+      sec3.appendChild(lc); content.appendChild(sec3);
+
+      function renderSet(name) {
+        tw.innerHTML = '';
+        const qd = qs.quizSets[name]?.questions??{};
+        Object.entries(qd).sort((a,b)=>a[1].correctRate-b[1].correctRate).forEach(([id,q])=>{
+          const pct=Math.round(q.correctRate*100);
+          const clr=pct>=80?'var(--success)':pct>=50?'var(--warning)':'var(--danger)';
+          tw.appendChild(h('div',{cls:'stat-row'},
+            h('span',{cls:'stat-id'},id),
+            h('div',{cls:'stat-bar-wrap'}, h('div',{cls:'stat-bar-fill',css:{width:pct+'%',background:clr}})),
+            h('span',{cls:'stat-pct',css:{color:clr}},pct+'%'),
+            h('span',{cls:'stat-cnt'},`×${q.totalAttempts}`),
+          ));
+        });
+        const scores = qs.quizSets[name]?.sessionScores??[];
+        requestAnimationFrame(()=>chart.line(lc,{labels:scores.map(s=>s.date),datasets:[{label:'正答率',values:scores.map(s=>Math.round(s.score/s.total*100)),color:'#4285f4'}]}));
+      }
+      renderSet(setNames[0]);
+      sel.addEventListener('change',e=>renderSet(e.target.value));
+    } catch (e) {
+      content.innerHTML = '';
+      content.appendChild(h('div',{css:{color:'var(--danger)',padding:'16px'}},'⚠️ '+e.message));
+    }
+  })();
+  return page;
+}
+
+// ============================================================
+// VIEW: CALENDAR
+// ============================================================
+async function viewCalendar() {
+  const page = h('div', {}, h('div',{cls:'page-header'}, h('div',{cls:'page-title'},'カレンダー')));
+  const content = h('div',{cls:'page'}, loading());
+  page.appendChild(content); page.appendChild(bottomNav('calendar'));
+  let cal = store.get().calData;
+  let log = store.get().studyLog;
+  (async () => {
+    if (!cal) { cal = await localFS.readJSON('calendar.json',{version:1,events:{}}); store.set({calData:cal}); }
+    if (!log) { log = await localFS.readJSON('study-log.json',{version:1,sessions:[],dailySummary:{}}); store.set({studyLog:log}); }
+    render();
+  })();
+
+  function render() {
+    const { calYear:yr, calMonth:mo } = store.get();
+    content.innerHTML = '';
+    const today = new Date().toISOString().slice(0,10);
+    content.appendChild(h('div',{cls:'cal-header'},
+      h('button',{cls:'btn btn-outline btn-sm',onclick:()=>{let y=yr,m=mo-1;if(m<0){m=11;y--;}store.set({calYear:y,calMonth:m});render();}},'＜'),
+      h('div',{cls:'cal-month'},`${yr}年${mo+1}月`),
+      h('button',{cls:'btn btn-outline btn-sm',onclick:()=>{let y=yr,m=mo+1;if(m>11){m=0;y++;}store.set({calYear:y,calMonth:m});render();}},'＞'),
+    ));
+    const grid = h('div',{cls:'cal-grid'});
+    ['日','月','火','水','木','金','土'].forEach(d=>grid.appendChild(h('div',{cls:'cal-weekday'},d)));
+    const first=new Date(yr,mo,1).getDay(), last=new Date(yr,mo+1,0).getDate();
+    for(let i=0;i<first;i++) grid.appendChild(h('div',{}));
+    for(let d=1;d<=last;d++){
+      const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const evs=cal.events?.[ds]??[];
+      const mins=Math.round((log.dailySummary?.[ds]?.totalSeconds??0)/60);
+      const isToday=ds===today;
+      const cell=h('div',{cls:['cal-day',isToday?'today':'',mins>0?'has-log':''].filter(Boolean).join(' '),onclick:()=>showDayModal(ds,evs,mins)},
+        h('span',{},String(d)),
+        mins>0?h('span',{cls:'cal-study-min'},`${mins}分`):null,
+        evs.length>0?h('div',{cls:'cal-dots'},...evs.slice(0,3).map(ev=>{
+          const clr={exam:'#e74c3c',goal:'#2ecc71',other:'#3498db'}[ev.type]??'#999';
+          return h('div',{cls:'cal-dot',css:{background:clr}});
+        })):null,
+      );
+      grid.appendChild(cell);
+    }
+    content.appendChild(grid);
+  }
+
+  function showDayModal(ds, evs, mins) {
+    modal((sheet, close) => {
+      sheet.appendChild(h('div',{cls:'modal-title'},ds));
+      if(mins>0) sheet.appendChild(h('div',{css:{color:'var(--primary)',fontSize:'14px',marginBottom:'12px'}},`📚 勉強時間: ${mins}分`));
+      const evList=h('div',{});
+      function renderEvs(){
+        evList.innerHTML='';
+        (cal.events?.[ds]??[]).forEach(ev=>{
+          const clr={exam:'#e74c3c',goal:'#2ecc71',other:'#3498db'}[ev.type]??'#999';
+          evList.appendChild(h('div',{css:{display:'flex',alignItems:'center',gap:'8px',padding:'8px 0',borderBottom:'1px solid var(--border)'}},
+            h('div',{css:{width:'10px',height:'10px',borderRadius:'50%',background:clr,flexShrink:'0'}}),
+            h('span',{css:{flex:'1',fontSize:'14px'}},ev.title),
+            h('button',{cls:'btn btn-outline btn-sm',onclick:async()=>{
+              cal.events[ds]=(cal.events[ds]??[]).filter(e=>e.eventId!==ev.eventId);
+              await localFS.writeJSON('calendar.json',cal); store.set({calData:cal}); renderEvs();
+            }},'削除'),
+          ));
+        });
+      }
+      renderEvs(); sheet.appendChild(evList);
+      sheet.appendChild(h('div',{css:{fontWeight:'600',fontSize:'14px',margin:'16px 0 8px'}},'予定を追加'));
+      const typeEl=h('select',{cls:'form-input',css:{marginBottom:'8px'}},
+        h('option',{value:'exam'},'試験・テスト'), h('option',{value:'goal'},'学習目標'), h('option',{value:'other'},'その他'));
+      const titleEl=h('input',{type:'text',cls:'form-input',placeholder:'タイトル',css:{marginBottom:'8px'}});
+      sheet.appendChild(typeEl); sheet.appendChild(titleEl);
+      sheet.appendChild(h('button',{cls:'btn btn-primary btn-block',onclick:async()=>{
+        const t=titleEl.value.trim(); if(!t) return;
+        if(!cal.events[ds]) cal.events[ds]=[];
+        cal.events[ds].push({eventId:crypto.randomUUID(),type:typeEl.value,title:t,note:''});
+        await localFS.writeJSON('calendar.json',cal); store.set({calData:cal}); titleEl.value=''; renderEvs();
+      }},'追加'));
+      sheet.appendChild(h('button',{cls:'btn btn-outline btn-block',css:{marginTop:'8px'},onclick:()=>{close();render();}},'閉じる'));
+    });
+  }
+  return page;
+}
+
+// ============================================================
+// VIEW: CREATE
+// ============================================================
+async function viewCreate() {
+  const { quizSets } = store.get();
+  const page = h('div', {}, h('div',{cls:'page-header'}, h('div',{cls:'page-title'},'問題作成')));
+  const content = h('div',{cls:'page'});
+  page.appendChild(content); page.appendChild(bottomNav('create'));
+
+  const setNameEl = h('input',{type:'text',cls:'form-input',placeholder:'新規セット名を入力'});
+  const selSet = h('select',{cls:'form-input',css:{marginTop:'8px'},
+    onchange(e){if(e.target.value)setNameEl.value=e.target.value;}});
+  selSet.appendChild(h('option',{value:''},'--- 既存セットから選択 ---'));
+  quizSets.forEach(s=>selSet.appendChild(h('option',{value:s.name},s.name)));
+  content.appendChild(h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'クイズセット名'), setNameEl, selSet));
+
+  const numEl = h('input',{type:'text',cls:'form-input',placeholder:'例: 001（空欄で自動採番）'});
+  content.appendChild(h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'問題番号'), numEl));
+
+  function makeUpload(label, required) {
+    let f = null;
+    const inp = h('input',{type:'file',accept:'image/*,text/plain',css:{display:'none'}});
+    const area = h('div',{cls:'upload-area'},label+(required?'':'（任意）'));
+    area.onclick = ()=>inp.click();
+    inp.onchange = ()=>{ f=inp.files[0]??null; area.textContent=f?f.name:label+(required?'':'（任意）'); area.classList.toggle('has-file',!!f); };
+    return { area, inp, get file(){return f;} };
+  }
+  const qU=makeUpload('問題ファイル（画像 or テキスト）',true);
+  const cU=makeUpload('正解ファイル',true);
+  const wUs=[1,2,3].map(i=>makeUpload(`不正解${i}`,false));
+  content.appendChild(h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'問題'), qU.area, qU.inp));
+  content.appendChild(h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'正解'), cU.area, cU.inp));
+  content.appendChild(h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'不正解選択肢（最大3つ）'), ...wUs.flatMap(u=>[u.area,u.inp])));
+
+  content.appendChild(h('button',{cls:'btn btn-primary btn-block',
+    onclick:async function(){
+      const setName=setNameEl.value.trim();
+      if(!setName){toast('セット名を入力してください');return;}
+      if(!qU.file){toast('問題ファイルを選択してください');return;}
+      if(!cU.file){toast('正解ファイルを選択してください');return;}
+      this.disabled=true; this.textContent='保存中...';
+      try {
+        const setDir = await localFS.createDir(localFS.root, setName);
+        let num=numEl.value.trim();
+        if(!num){
+          const existing=await localFS.listDirs(setDir);
+          const nums=existing.map(d=>parseInt(d.name,10)).filter(n=>!isNaN(n));
+          num=String(nums.length>0?Math.max(...nums)+1:1).padStart(3,'0');
+        }
+        const qDir=await localFS.createDir(setDir,num);
+        const ext=f=>f.name.split('.').pop();
+        await localFS.writeFile(qDir,`question.${ext(qU.file)}`,qU.file);
+        await localFS.writeFile(qDir,`correct.${ext(cU.file)}`,cU.file);
+        for(const wu of wUs){ if(wu.file) await localFS.writeFile(qDir,`wrong${wUs.indexOf(wu)+1}.${ext(wu.file)}`,wu.file); }
+        toast(`問題 ${num} を保存しました ✅`);
+        setNameEl.value=''; numEl.value='';
+        [qU,cU,...wUs].forEach(u=>{u.inp.value='';u.area.textContent=u.area.textContent;u.area.classList.remove('has-file');});
+      } catch(e){toast('エラー: '+e.message);}
+      finally{this.disabled=false;this.textContent='保存する';}
+    }
+  },'保存する'));
+  return page;
+}
+
+// ============================================================
+// VIEW: SYNC（Drive 差分確認・ダウンロード）
+// ============================================================
+async function viewSync() {
+  const page = h('div', {}, h('div',{cls:'page-header'}, h('div',{cls:'page-title'},'Drive 同期')));
+  const content = h('div',{cls:'page'});
+  page.appendChild(content); page.appendChild(bottomNav('sync'));
+
+  // Drive 設定フォーム
+  const apiKeyEl = h('input',{type:'text',cls:'form-input',placeholder:'AIza...',value:localStorage.getItem('psa_api_key')??''});
+  const folderEl = h('input',{type:'text',cls:'form-input',placeholder:'1abc2defg...',value:localStorage.getItem('psa_drive_folder')??''});
+  content.appendChild(h('div',{cls:'card'},
+    h('div',{css:{fontWeight:'600',marginBottom:'12px'}},'Drive 設定'),
+    h('div',{cls:'warn-box'},'Drive フォルダは「リンクを知っている全員 - 閲覧者」で共有してください'),
+    h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'Google API キー'), apiKeyEl),
+    h('div',{cls:'form-group'}, h('label',{cls:'form-label'},'Drive フォルダ ID（URLの末尾）'), folderEl),
+    h('button',{cls:'btn btn-outline btn-block',onclick:()=>{
+      localStorage.setItem('psa_api_key',apiKeyEl.value.trim());
+      localStorage.setItem('psa_drive_folder',folderEl.value.trim());
+      toast('設定を保存しました');
+    }},'設定を保存'),
+  ));
+
+  const syncBtn = h('button',{cls:'btn btn-primary btn-block',css:{marginBottom:'16px'},
+    onclick:async function(){
+      if(!driveAPI.isConfigured()){toast('APIキーとフォルダIDを設定してください');return;}
+      this.disabled=true; this.textContent='確認中...';
+      try{
+        const diff=await syncEngine.getDiff();
+        renderDiff(diff);
+      } catch(e){toast('エラー: '+e.message);}
+      finally{this.disabled=false;this.textContent='差分を確認する';}
+    }
+  },'差分を確認する');
+  content.appendChild(syncBtn);
+
+  const diffArea = h('div',{});
+  content.appendChild(diffArea);
+
+  function renderDiff(diff) {
+    diffArea.innerHTML='';
+    if(!diff.onlyInDrive.length && !diff.onlyInLocal.length){
+      diffArea.appendChild(h('div',{cls:'card',css:{textAlign:'center',color:'var(--muted)'}},
+        h('div',{css:{fontSize:'32px',marginBottom:'8px'}},'✅'),
+        h('div',{css:{fontWeight:'600'}},'差分なし'),
+        h('div',{css:{fontSize:'13px',marginTop:'4px'}},'Drive とローカルは同期されています'),
+      ));
+      return;
+    }
+    if(diff.onlyInDrive.length){
+      const sec=h('div',{cls:'card'});
+      sec.appendChild(h('div',{css:{fontWeight:'600',marginBottom:'12px',color:'var(--primary)'}},'⬇️ Drive にあってローカルにない'));
+      diff.onlyInDrive.forEach(item=>{
+        const row=h('div',{cls:'diff-item'},
+          h('div',{cls:'diff-badge drive'},'Drive'),
+          h('div',{css:{flex:'1',fontWeight:'500'}},item.name),
+        );
+        const btn=h('button',{cls:'btn btn-primary btn-sm',onclick:async function(){
+          this.disabled=true; this.textContent='DL中...';
+          try{
+            await syncEngine.downloadQuizSet(item,(done,total)=>{this.textContent=`${done}/${total}`;});
+            this.textContent='完了 ✅'; toast(`${item.name} をダウンロードしました`);
+          }catch(e){toast('DL失敗: '+e.message);this.textContent='再試行';}
+          finally{this.disabled=false;}
+        }},'ダウンロード');
+        row.appendChild(btn);
+        sec.appendChild(row);
+      });
+      diffArea.appendChild(sec);
+    }
+    if(diff.onlyInLocal.length){
+      const sec=h('div',{cls:'card'});
+      sec.appendChild(h('div',{css:{fontWeight:'600',marginBottom:'12px',color:'var(--success)'}},'💾 ローカルのみ（Drive にない）'));
+      diff.onlyInLocal.forEach(item=>{
+        sec.appendChild(h('div',{cls:'diff-item'},
+          h('div',{cls:'diff-badge local'},'ローカル'),
+          h('div',{css:{flex:'1',fontWeight:'500'}},item.name),
+          h('div',{css:{fontSize:'12px',color:'var(--muted)'}},'Drive に手動でアップロードして共有できます'),
+        ));
+      });
+      diffArea.appendChild(sec);
+    }
+  }
+  return page;
+}
+
+// ============================================================
+// APP ROUTER
+// ============================================================
+const app = {
+  async setup() {
+    this.render('loading');
+    try {
+      await localFS.initDataDir();
+      const [studyLog, quizStats, calData] = await Promise.all([
+        localFS.readJSON('study-log.json',  {version:1,sessions:[],dailySummary:{}}),
+        localFS.readJSON('quiz-stats.json', {version:1,quizSets:{}}),
+        localFS.readJSON('calendar.json',   {version:1,events:{}}),
+      ]);
+      store.set({ studyLog, quizStats, calData });
+      this.render('home');
+    } catch(e) {
+      console.error(e);
+      this.render('setup', null);
+    }
+  },
+
+  go(view) { store.revokeBlobs(); this.render(view); },
+
+  render(view, param) {
+    const root = document.getElementById('app');
+    root.innerHTML = '';
+    if (view === 'loading') {
+      root.appendChild(h('div',{cls:'loading',css:{minHeight:'100vh'}}, h('div',{cls:'spinner'}),'初期化中...'));
+      return;
+    }
+    if (view === 'setup') { root.appendChild(viewSetup(param)); return; }
+
+    const views = {
+      home: viewHome, 'quiz-loading': viewQuizLoading,
+      quiz: viewQuiz, result: viewResult,
+      stats: viewStats, calendar: viewCalendar,
+      create: viewCreate, sync: viewSync,
+    };
+    const fn = views[view];
+    if (!fn) return;
+    const r = fn();
+    if (r instanceof Promise) r.then(el => { if(el){root.innerHTML=''; root.appendChild(el);} });
+    else if (r) root.appendChild(r);
+  },
+
+  async init() {
+    this.render('loading');
+    // File System Access API サポート確認
+    if (!('showDirectoryPicker' in window)) {
+      document.getElementById('app').innerHTML = `
+        <div class="empty" style="min-height:100vh;justify-content:center;display:flex;flex-direction:column">
+          <div class="empty-icon">⚠️</div>
+          <div class="empty-title">未対応ブラウザ</div>
+          <div class="empty-desc">このアプリは Chrome / Edge が必要です。<br>iOS Safari は現在未対応です。</div>
+        </div>`;
+      return;
+    }
+    const state = await localFS.tryRestoreHandle();
+    if (state === 'ok') {
+      await this.setup();
+    } else if (state === 'needs-permission') {
+      this.render('setup', 'needs-permission');
+    } else {
+      this.render('setup', null);
+    }
+  },
+};
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('load', () => app.init());
+</script>
+</body>
+</html>
