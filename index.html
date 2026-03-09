@@ -402,6 +402,22 @@
       font-size: 16px; font-weight: 600; cursor: pointer;
     }
     .order-confirm-btn:disabled { background: var(--border); color: var(--text-secondary); cursor: not-allowed; }
+
+    /* Multiple choice (new) */
+    .mc-confirm-btn {
+      background: var(--primary); color: white; border: none;
+      border-radius: var(--radius); padding: 14px; width: 100%;
+      font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px;
+    }
+    .mc-confirm-btn:disabled { background: var(--border); color: var(--text-secondary); cursor: not-allowed; }
+    .quiz-choice.selected { border-color: var(--primary); background: #e8f0fd; }
+    .quiz-choice.selected .choice-badge { background: var(--primary); color: white; }
+    .quiz-choice.sel-correct { border-color: var(--correct); background: #e8f8ef; color: var(--correct); }
+    .quiz-choice.sel-correct .choice-badge { background: var(--correct); color: white; }
+    .quiz-choice.sel-wrong { border-color: var(--accent); background: #fdecea; color: var(--accent); }
+    .quiz-choice.sel-wrong .choice-badge { background: var(--accent); color: white; }
+    .quiz-choice.missed { border-color: #f39c12; background: #fef9e7; color: #f39c12; }
+    .quiz-choice.missed .choice-badge { background: #f39c12; color: white; }
   </style>
 </head>
 <body>
@@ -411,8 +427,19 @@
   <div class="welcome-icon">📚</div>
   <div class="welcome-title">StudyApp</div>
   <p class="welcome-sub" id="welcome-sub">通勤中でも手軽に勉強できる<br>あなただけの学習アプリ</p>
-  <button class="btn" onclick="App.selectWorkspace()">📁 フォルダを選択して始める</button>
-  <p style="font-size:12px;color:var(--text-secondary)">選択したフォルダが問題データの保存先になります</p>
+
+  <!-- 前回フォルダなし -->
+  <div id="welcome-new">
+    <button class="btn" onclick="App.selectWorkspace()">📁 フォルダを選択して始める</button>
+    <p style="font-size:12px;color:var(--text-secondary)">選択したフォルダが問題データの保存先になります</p>
+  </div>
+
+  <!-- 前回フォルダあり -->
+  <div id="welcome-resume" style="display:none;width:100%">
+    <p id="welcome-folder-name" style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;text-align:center"></p>
+    <button class="btn" onclick="App.resumeWorkspace()">▶ 前回のフォルダで始める</button>
+    <button class="btn secondary" onclick="App.selectWorkspace()">📁 別のフォルダを選択</button>
+  </div>
 </div>
 
 <!-- ===== Home ===== -->
@@ -468,9 +495,15 @@
     <div class="editor-section" style="margin-bottom:14px">
       <div class="editor-label">問題タイプ</div>
       <div class="content-type-tabs" id="problem-type-tabs">
-        <button class="tab-btn active" onclick="Editor.setProblemType('multiple-choice',this)">4択問題</button>
+        <button class="tab-btn active" onclick="Editor.setProblemType('multiple-choice',this)">選択問題</button>
         <button class="tab-btn" onclick="Editor.setProblemType('order',this)">整序問題</button>
       </div>
+    </div>
+
+    <!-- タイトル -->
+    <div class="editor-section" id="title-section">
+      <div class="editor-label">タイトル（任意）</div>
+      <input type="text" id="problem-title" placeholder="例: 問題のタイトル">
     </div>
 
     <!-- 問題 -->
@@ -499,28 +532,27 @@
       <button class="add-choice-btn" id="add-order-item-btn" onclick="Editor.addOrderItem()">＋ 選択肢を追加</button>
     </div>
 
-    <!-- 正解 -->
+    <!-- 正解プール -->
     <div class="editor-section" id="mc-correct-section">
-      <div class="editor-label" style="color:var(--correct)">✓ 正解</div>
-      <textarea id="correct-text" placeholder="正解の選択肢"></textarea>
-      <div id="correct-image-area" style="display:none">
-        <img id="correct-img-preview" class="img-preview" style="display:none">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn secondary small" onclick="Editor.loadImage('correct')">📷 画像を選択</button>
-          <button class="btn secondary small" id="correct-edit-btn" style="display:none" onclick="Editor.openEditor('correct')">✏️ 編集</button>
-        </div>
-      </div>
-      <div class="content-type-tabs" id="correct-type-tabs" style="margin-top:8px">
-        <button class="tab-btn active" onclick="Editor.setCorrectType('text',this)">テキスト</button>
-        <button class="tab-btn" onclick="Editor.setCorrectType('image',this)">画像</button>
-      </div>
+      <div class="editor-label" style="color:var(--correct)">✓ 正解の選択肢（全件が出題時に表示されます）</div>
+      <div id="correct-choices"></div>
+      <button class="add-choice-btn" id="add-correct-btn" onclick="Editor.addCorrectItem()">＋ 正解を追加</button>
     </div>
 
-    <!-- 不正解 -->
+    <!-- 誤答プール -->
     <div class="editor-section" id="mc-wrong-section">
-      <div class="editor-label" style="color:var(--accent)">✗ 不正解（1〜3個）</div>
+      <div class="editor-label" style="color:var(--accent)">✗ 誤答の選択肢</div>
       <div id="wrong-choices"></div>
-      <button class="add-choice-btn" id="add-wrong-btn" onclick="Editor.addWrongChoice()">＋ 不正解の選択肢を追加</button>
+      <button class="add-choice-btn" id="add-wrong-btn" onclick="Editor.addWrongChoice()">＋ 誤答を追加</button>
+    </div>
+
+    <!-- 出題時の表示数 -->
+    <div class="editor-section" id="mc-display-count-section">
+      <div class="editor-label">出題時の表示数</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="display-count" min="2" value="4" style="width:80px">
+        <span style="font-size:13px;color:var(--text-secondary)">個（正解数より大きい値を設定）</span>
+      </div>
     </div>
 
     <!-- 解説 -->
@@ -562,6 +594,7 @@
     </div>
     <div class="quiz-question" id="quiz-question-content"></div>
     <div class="quiz-choices" id="quiz-choices"></div>
+    <button class="mc-confirm-btn" id="mc-confirm-btn" disabled onclick="Quiz.confirmMultipleChoice()">回答確定</button>
     <div id="order-ui" style="display:none">
       <div class="order-answer-slots" id="order-answer-slots"></div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;text-align:center">↑ タップで取り消し</div>
@@ -672,6 +705,40 @@
 
 <script>
 'use strict';
+
+// ===== IndexedDB (ハンドル永続化) =====
+const IDB = {
+  _db: null,
+  async open() {
+    if (this._db) return this._db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('studyapp-db', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('workspace');
+      req.onsuccess = e => { this._db = e.target.result; resolve(this._db); };
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async saveHandle(handle) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('workspace', 'readwrite');
+      tx.objectStore('workspace').put(handle, 'handle');
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async loadHandle() {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('workspace', 'readonly');
+        const req = tx.objectStore('workspace').get('handle');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch { return null; }
+  },
+};
 
 // ===== State =====
 const State = {
@@ -838,7 +905,11 @@ const ProblemIO = {
   async load(handle, num) {
     const typeTxt = await FS.readText(handle, 'type.txt');
     const isOrder = (typeTxt || '').trim() === 'order';
-    const p = { num, handle, problemType: isOrder ? 'order' : 'multiple-choice', questionType: 'text', question: '', correctType: 'text', correct: '', wrongs: [], items: [], explanationType: 'text', explanation: '' };
+    const p = { num, handle, problemType: isOrder ? 'order' : 'multiple-choice', title: '', questionType: 'text', question: '', corrects: [], wrongs: [], displayCount: 4, items: [], explanationType: 'text', explanation: '' };
+
+    // Title (全問題タイプ共通)
+    const titleTxt = await FS.readText(handle, 'title.txt');
+    if (titleTxt !== null) p.title = titleTxt.trim();
 
     // Question
     const qTxt = await FS.readText(handle, 'question.txt');
@@ -855,21 +926,19 @@ const ProblemIO = {
         if (txt !== null) p.items.push({ type: 'text', content: txt });
       }
     } else {
-      // 4択問題: correct / wrong を読み込む
-      const cTxt = await FS.readText(handle, 'correct.txt');
-      if (cTxt !== null) { p.correct = cTxt; p.correctType = 'text'; }
-      else {
-        const img = await FS.readImageAsDataURL(handle, 'correct.png') || await FS.readImageAsDataURL(handle, 'correct.jpg');
-        if (img) { p.correct = img; p.correctType = 'image'; }
+      // 選択問題: correct1〜N.txt / wrong1〜N.txt / display_count.txt
+      for (let i = 1; i <= 20; i++) {
+        const txt = await FS.readText(handle, `correct${i}.txt`);
+        if (txt === null) break;
+        p.corrects.push({ type: 'text', content: txt });
       }
-
-      // Wrongs
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 20; i++) {
         const txt = await FS.readText(handle, `wrong${i}.txt`);
-        if (txt !== null) { p.wrongs.push({ type: 'text', content: txt }); continue; }
-        const img = await FS.readImageAsDataURL(handle, `wrong${i}.png`) || await FS.readImageAsDataURL(handle, `wrong${i}.jpg`);
-        if (img) p.wrongs.push({ type: 'image', content: img });
+        if (txt === null) break;
+        p.wrongs.push({ type: 'text', content: txt });
       }
+      const dcTxt = await FS.readText(handle, 'display_count.txt');
+      p.displayCount = dcTxt ? parseInt(dcTxt.trim()) : p.corrects.length + p.wrongs.length;
     }
 
     // Explanation
@@ -888,6 +957,11 @@ const ProblemIO = {
     const dir = await FS.getDir(setHandle, String(num).padStart(3, '0'), true);
     problem.handle = dir;
 
+    // Title (全問題タイプ共通)
+    if (problem.title && problem.title.trim()) {
+      await FS.writeText(dir, 'title.txt', problem.title.trim());
+    }
+
     if (problem.questionType === 'text') {
       await FS.writeText(dir, 'question.txt', problem.question);
     } else {
@@ -904,29 +978,25 @@ const ProblemIO = {
         try { await dir.removeEntry(`item${i}.txt`); } catch {}
       }
       // 既存の correct/wrong ファイルがあれば削除
-      try { await dir.removeEntry('correct.txt'); } catch {}
-      try { await dir.removeEntry('correct.png'); } catch {}
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 20; i++) {
+        try { await dir.removeEntry(`correct${i}.txt`); } catch {}
         try { await dir.removeEntry(`wrong${i}.txt`); } catch {}
-        try { await dir.removeEntry(`wrong${i}.png`); } catch {}
       }
     } else {
-      if (problem.correctType === 'text') {
-        await FS.writeText(dir, 'correct.txt', problem.correct);
-      } else {
-        await this._saveDataURL(dir, 'correct.png', problem.correct);
+      // 選択問題: correct1〜N.txt / wrong1〜N.txt / display_count.txt
+      for (let i = 0; i < problem.corrects.length; i++) {
+        await FS.writeText(dir, `correct${i+1}.txt`, problem.corrects[i].content);
       }
-
+      for (let i = problem.corrects.length + 1; i <= 20; i++) {
+        try { await dir.removeEntry(`correct${i}.txt`); } catch {}
+      }
       for (let i = 0; i < problem.wrongs.length; i++) {
-        const w = problem.wrongs[i];
-        if (w.type === 'text') await FS.writeText(dir, `wrong${i+1}.txt`, w.content);
-        else await this._saveDataURL(dir, `wrong${i+1}.png`, w.content);
+        await FS.writeText(dir, `wrong${i+1}.txt`, problem.wrongs[i].content);
       }
-      // Remove deleted wrong slots
-      for (let i = problem.wrongs.length + 1; i <= 3; i++) {
+      for (let i = problem.wrongs.length + 1; i <= 20; i++) {
         try { await dir.removeEntry(`wrong${i}.txt`); } catch {}
-        try { await dir.removeEntry(`wrong${i}.png`); } catch {}
       }
+      await FS.writeText(dir, 'display_count.txt', String(problem.displayCount));
     }
 
     if (problem.explanation) {
@@ -955,14 +1025,35 @@ const ProblemIO = {
 
 // ===== App =====
 const App = {
-  init() {
+  async init() {
     if (!window.showDirectoryPicker) {
       document.getElementById('welcome-sub').textContent = 'このブラウザはサポートされていません。\nAndroid Chrome をお使いください。';
-    } else {
-      const name = localStorage.getItem('workspace-name');
-      if (name) {
-        document.getElementById('welcome-sub').textContent = `前回: ${name}\nフォルダを再選択して開始してください`;
+      return;
+    }
+    // IndexedDB から前回のハンドルを読み込む
+    const handle = await IDB.loadHandle();
+    if (handle) {
+      document.getElementById('welcome-sub').textContent = '';
+      document.getElementById('welcome-new').style.display = 'none';
+      document.getElementById('welcome-resume').style.display = '';
+      document.getElementById('welcome-folder-name').textContent = `前回のフォルダ: ${handle.name}`;
+      State.rootHandle = handle;
+    }
+  },
+
+  async resumeWorkspace() {
+    if (!State.rootHandle) { this.selectWorkspace(); return; }
+    try {
+      const perm = await State.rootHandle.queryPermission({ mode: 'readwrite' });
+      if (perm !== 'granted') {
+        const req = await State.rootHandle.requestPermission({ mode: 'readwrite' });
+        if (req !== 'granted') { showToast('フォルダへのアクセスが拒否されました。別のフォルダを選択してください'); return; }
       }
+      await Data.init();
+      await this.loadHome();
+      Nav.replace('home');
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast('フォルダを開けませんでした。別のフォルダを選択してください');
     }
   },
 
@@ -970,7 +1061,7 @@ const App = {
     if (!window.showDirectoryPicker) { alert('Android Chrome をお使いください。'); return; }
     try {
       State.rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      localStorage.setItem('workspace-name', State.rootHandle.name);
+      await IDB.saveHandle(State.rootHandle);
       await Data.init();
       await this.loadHome();
       Nav.replace('home');
@@ -1018,7 +1109,8 @@ const App = {
       const total = stat.correct + stat.wrong;
       const rate = total > 0 ? Math.round(stat.correct / total * 100) + '%' : '未挑戦';
       const typeIcon = p.problemType === 'order' ? '🔢 ' : '';
-      const preview = p.questionType === 'text' ? (typeIcon + (p.question.substring(0, 28) || '（空）')) : (typeIcon + '🖼 画像問題');
+      const displayText = p.title ? p.title : (p.questionType === 'text' ? (p.question.substring(0, 28) || '（空）') : '🖼 画像問題');
+      const preview = typeIcon + displayText;
       const btn = document.createElement('button');
       btn.className = 'problem-item';
       btn.innerHTML = `<span class="problem-num">${String(p.num).padStart(3,'0')}</span><span class="problem-preview">${preview}</span><span class="problem-stats">${rate}</span>`;
@@ -1096,15 +1188,12 @@ const App = {
 const Editor = {
   problemType: 'multiple-choice',
   questionType: 'text',
-  correctType: 'text',
   exType: 'text',
   questionImg: null,
-  correctImg: null,
   exImg: null,
-  wrongImgs: [],
 
   load(problem) {
-    this.questionImg = null; this.correctImg = null; this.exImg = null; this.wrongImgs = [];
+    this.questionImg = null; this.exImg = null;
     document.getElementById('editor-title').textContent = problem ? '問題を編集' : '問題を作成';
     document.getElementById('editor-delete-area').style.display = problem ? 'block' : 'none';
 
@@ -1115,31 +1204,32 @@ const Editor = {
     document.getElementById('order-section').style.display = isOrder ? '' : 'none';
     document.getElementById('mc-correct-section').style.display = isOrder ? 'none' : '';
     document.getElementById('mc-wrong-section').style.display = isOrder ? 'none' : '';
+    document.getElementById('mc-display-count-section').style.display = isOrder ? 'none' : '';
     document.getElementById('order-items').innerHTML = '';
 
     // Reset tabs
     this._resetTabs('q-type-tabs', 0);
-    this._resetTabs('correct-type-tabs', 0);
     this._resetTabs('ex-type-tabs', 0);
-    this.questionType = 'text'; this.correctType = 'text'; this.exType = 'text';
+    this.questionType = 'text'; this.exType = 'text';
     document.getElementById('q-text-area').style.display = '';
     document.getElementById('q-image-area').style.display = 'none';
     document.getElementById('q-img-preview').style.display = 'none';
     document.getElementById('q-edit-btn').style.display = 'none';
-    document.getElementById('correct-text').style.display = '';
-    document.getElementById('correct-image-area').style.display = 'none';
-    document.getElementById('correct-img-preview').style.display = 'none';
-    document.getElementById('correct-edit-btn').style.display = 'none';
     document.getElementById('ex-text-area').style.display = '';
     document.getElementById('ex-image-area').style.display = 'none';
     document.getElementById('ex-img-preview').style.display = 'none';
     document.getElementById('ex-edit-btn').style.display = 'none';
     document.getElementById('q-text').value = '';
-    document.getElementById('correct-text').value = '';
     document.getElementById('ex-text').value = '';
+    document.getElementById('correct-choices').innerHTML = '';
     document.getElementById('wrong-choices').innerHTML = '';
+    document.getElementById('problem-title').value = '';
+    document.getElementById('display-count').value = 4;
 
-    if (!problem) { this.addWrongChoice(); return; }
+    if (!problem) { this.addCorrectItem(); this.addWrongChoice(); return; }
+
+    // タイトル
+    document.getElementById('problem-title').value = problem.title || '';
 
     if (problem.questionType === 'image') {
       this.setQuestionType('image', document.querySelector('#q-type-tabs .tab-btn:nth-child(2)'));
@@ -1155,18 +1245,11 @@ const Editor = {
       (problem.items || []).forEach(item => this.addOrderItem(item));
       if (!problem.items || problem.items.length === 0) this.addOrderItem();
     } else {
-      if (problem.correctType === 'image') {
-        this.setCorrectType('image', document.querySelector('#correct-type-tabs .tab-btn:nth-child(2)'));
-        this.correctImg = problem.correct;
-        const img = document.getElementById('correct-img-preview');
-        img.src = problem.correct; img.style.display = 'block';
-        document.getElementById('correct-edit-btn').style.display = '';
-      } else {
-        document.getElementById('correct-text').value = problem.correct;
-      }
-
-      problem.wrongs.forEach((w, i) => this.addWrongChoice(w, i));
-      if (problem.wrongs.length === 0) this.addWrongChoice();
+      (problem.corrects || []).forEach(c => this.addCorrectItem(c));
+      if (!problem.corrects || problem.corrects.length === 0) this.addCorrectItem();
+      (problem.wrongs || []).forEach(w => this.addWrongChoice(w));
+      if (!problem.wrongs || problem.wrongs.length === 0) this.addWrongChoice();
+      document.getElementById('display-count').value = problem.displayCount || (problem.corrects.length + problem.wrongs.length);
     }
 
     if (problem.explanationType === 'image') {
@@ -1187,7 +1270,10 @@ const Editor = {
     document.getElementById('order-section').style.display = isOrder ? '' : 'none';
     document.getElementById('mc-correct-section').style.display = isOrder ? 'none' : '';
     document.getElementById('mc-wrong-section').style.display = isOrder ? 'none' : '';
+    document.getElementById('mc-display-count-section').style.display = isOrder ? 'none' : '';
     if (isOrder && document.getElementById('order-items').children.length === 0) this.addOrderItem();
+    if (!isOrder && document.getElementById('correct-choices').children.length === 0) this.addCorrectItem();
+    if (!isOrder && document.getElementById('wrong-choices').children.length === 0) this.addWrongChoice();
   },
 
   addOrderItem(data) {
@@ -1232,13 +1318,6 @@ const Editor = {
     document.getElementById('q-image-area').style.display = type === 'image' ? '' : 'none';
   },
 
-  setCorrectType(type, btn) {
-    this.correctType = type;
-    if (btn) { btn.closest('.content-type-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-    document.getElementById('correct-text').style.display = type === 'text' ? '' : 'none';
-    document.getElementById('correct-image-area').style.display = type === 'image' ? '' : 'none';
-  },
-
   setExType(type, btn) {
     this.exType = type;
     if (btn) { btn.closest('.content-type-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
@@ -1246,26 +1325,46 @@ const Editor = {
     document.getElementById('ex-image-area').style.display = type === 'image' ? '' : 'none';
   },
 
-  addWrongChoice(wrongData, idx) {
+  addCorrectItem(data) {
+    const container = document.getElementById('correct-choices');
+    const i = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'choice-row';
+    const val = (data && data.content) ? data.content : '';
+    div.innerHTML = `
+      <span class="choice-label correct">${i+1}</span>
+      <textarea placeholder="正解 ${i+1}" style="min-height:40px">${val}</textarea>
+      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeCorrectItem(this)">✕</button>`;
+    container.appendChild(div);
+  },
+
+  removeCorrectItem(btn) {
+    btn.closest('.choice-row').remove();
+    document.querySelectorAll('#correct-choices .choice-label').forEach((el, i) => {
+      el.textContent = i + 1;
+      el.nextElementSibling.placeholder = `正解 ${i + 1}`;
+    });
+  },
+
+  addWrongChoice(wrongData) {
     const container = document.getElementById('wrong-choices');
-    if (container.children.length >= 3) return;
-    const i = idx !== undefined ? idx : container.children.length;
+    const i = container.children.length;
     const div = document.createElement('div');
     div.className = 'choice-row';
     const val = (wrongData && wrongData.type === 'text') ? wrongData.content : '';
     div.innerHTML = `
       <span class="choice-label wrong">${i+1}</span>
-      <textarea placeholder="不正解 ${i+1}" data-wrong-idx="${i}">${val}</textarea>
+      <textarea placeholder="誤答 ${i+1}" style="min-height:40px">${val}</textarea>
       <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeWrongChoice(this)">✕</button>`;
     container.appendChild(div);
-    if (wrongData && wrongData.type === 'image') this.wrongImgs[i] = wrongData.content;
-    document.getElementById('add-wrong-btn').style.display = container.children.length >= 3 ? 'none' : '';
   },
 
   removeWrongChoice(btn) {
     btn.closest('.choice-row').remove();
-    document.getElementById('add-wrong-btn').style.display =
-      document.getElementById('wrong-choices').children.length >= 3 ? 'none' : '';
+    document.querySelectorAll('#wrong-choices .choice-label').forEach((el, i) => {
+      el.textContent = i + 1;
+      el.nextElementSibling.placeholder = `誤答 ${i + 1}`;
+    });
   },
 
   async loadImage(target) {
@@ -1282,11 +1381,6 @@ const Editor = {
           const img = document.getElementById('q-img-preview');
           img.src = data; img.style.display = 'block';
           document.getElementById('q-edit-btn').style.display = '';
-        } else if (target === 'correct') {
-          this.correctImg = data;
-          const img = document.getElementById('correct-img-preview');
-          img.src = data; img.style.display = 'block';
-          document.getElementById('correct-edit-btn').style.display = '';
         } else if (target === 'explanation') {
           this.exImg = data;
           const img = document.getElementById('ex-img-preview');
@@ -1303,6 +1397,9 @@ const Editor = {
   async save() {
     const problem = State.currentProblem ? { ...State.currentProblem } : {};
     problem.problemType = this.problemType;
+
+    // タイトル
+    problem.title = document.getElementById('problem-title').value.trim();
 
     // Question
     if (this.questionType === 'text') {
@@ -1323,23 +1420,28 @@ const Editor = {
       });
       if (problem.items.length < 2) { showToast('選択肢を2つ以上入力してください'); return; }
     } else {
-      // 4択問題
-      if (this.correctType === 'text') {
-        problem.correct = document.getElementById('correct-text').value.trim();
-        problem.correctType = 'text';
-      } else {
-        if (!this.correctImg) { showToast('正解の画像を選択してください'); return; }
-        problem.correct = this.correctImg; problem.correctType = 'image';
-      }
-      if (!problem.correct) { showToast('正解を入力してください'); return; }
+      // 選択問題: corrects / wrongs / displayCount を収集
+      problem.corrects = [];
+      document.querySelectorAll('#correct-choices textarea').forEach(ta => {
+        const t = ta.value.trim();
+        if (t) problem.corrects.push({ type: 'text', content: t });
+      });
+      if (problem.corrects.length === 0) { showToast('正解の選択肢を1つ以上入力してください'); return; }
 
       problem.wrongs = [];
-      document.querySelectorAll('#wrong-choices textarea').forEach((ta, i) => {
+      document.querySelectorAll('#wrong-choices textarea').forEach(ta => {
         const t = ta.value.trim();
         if (t) problem.wrongs.push({ type: 'text', content: t });
-        else if (this.wrongImgs[i]) problem.wrongs.push({ type: 'image', content: this.wrongImgs[i] });
       });
-      if (problem.wrongs.length === 0) { showToast('不正解の選択肢を1つ以上入力してください'); return; }
+      if (problem.wrongs.length === 0) { showToast('誤答の選択肢を1つ以上入力してください'); return; }
+
+      problem.displayCount = parseInt(document.getElementById('display-count').value) || (problem.corrects.length + problem.wrongs.length);
+      if (problem.displayCount <= problem.corrects.length) {
+        showToast('表示数は正解数より大きくしてください'); return;
+      }
+      if (problem.displayCount > problem.corrects.length + problem.wrongs.length) {
+        showToast('表示数がプールの合計を超えています'); return;
+      }
     }
 
     // Explanation
@@ -1366,16 +1468,12 @@ const Editor = {
   openEditor(target) {
     let dataURL;
     if (target === 'question') dataURL = this.questionImg;
-    else if (target === 'correct') dataURL = this.correctImg;
     else if (target === 'explanation') dataURL = this.exImg;
     if (!dataURL) return;
     ImgEditor.open(dataURL, result => {
       if (target === 'question') {
         this.questionImg = result;
         document.getElementById('q-img-preview').src = result;
-      } else if (target === 'correct') {
-        this.correctImg = result;
-        document.getElementById('correct-img-preview').src = result;
       } else if (target === 'explanation') {
         this.exImg = result;
         document.getElementById('ex-img-preview').src = result;
@@ -1409,6 +1507,8 @@ const Quiz = {
   problemTimes: {},
   orderSelectedIdxs: [],
   orderShuffledIdxs: [],
+  mcSelectedSet: new Set(),   // 選択中の選択肢インデックス
+  mcChoicesData: [],          // 表示中の選択肢データ [{content, isCorrect}]
 
   start(problems, mode) {
     this.problems = problems;
@@ -1445,37 +1545,112 @@ const Quiz = {
 
     if (p.problemType === 'order') {
       document.getElementById('quiz-choices').style.display = 'none';
+      document.getElementById('mc-confirm-btn').style.display = 'none';
       document.getElementById('order-ui').style.display = '';
       this.renderOrder(p);
     } else {
       document.getElementById('order-ui').style.display = 'none';
       document.getElementById('quiz-choices').style.display = '';
-
-      // Choices (shuffle)
-      const choices = [
-        { content: p.correct, type: p.correctType, isCorrect: true },
-        ...p.wrongs.map(w => ({ content: w.content, type: w.type, isCorrect: false }))
-      ];
-      for (let i = choices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [choices[i], choices[j]] = [choices[j], choices[i]];
-      }
-
-      const labels = ['A', 'B', 'C', 'D'];
-      const choicesEl = document.getElementById('quiz-choices');
-      choicesEl.innerHTML = '';
-      choices.forEach((c, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'quiz-choice';
-        const inner = c.type === 'image'
-          ? `<img src="${c.content}" style="width:100%;border-radius:6px">`
-          : c.content;
-        btn.innerHTML = `<span class="choice-badge">${labels[i]}</span><span style="flex:1">${inner}</span>`;
-        btn.dataset.correct = c.isCorrect ? '1' : '0';
-        btn.onclick = () => this.answer(btn, c.isCorrect, p);
-        choicesEl.appendChild(btn);
-      });
+      document.getElementById('mc-confirm-btn').style.display = '';
+      document.getElementById('mc-confirm-btn').disabled = true;
+      this.mcSelectedSet = new Set();
+      this.renderMultipleChoice(p);
     }
+  },
+
+  renderMultipleChoice(p) {
+    // 正解全件 + 誤答プールから (displayCount - corrects.length) 個ランダム選択
+    const corrects = (p.corrects || []).map(c => ({ content: c.content, isCorrect: true }));
+    const wrongCount = (p.displayCount || corrects.length + (p.wrongs || []).length) - corrects.length;
+    const wrongPool = [...(p.wrongs || [])];
+    // Fisher-Yates で wrongPool をシャッフルして先頭 wrongCount 個を使用
+    for (let i = wrongPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [wrongPool[i], wrongPool[j]] = [wrongPool[j], wrongPool[i]];
+    }
+    const wrongs = wrongPool.slice(0, Math.max(0, wrongCount)).map(w => ({ content: w.content, isCorrect: false }));
+
+    // 全選択肢をシャッフル
+    const choices = [...corrects, ...wrongs];
+    for (let i = choices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [choices[i], choices[j]] = [choices[j], choices[i]];
+    }
+    this.mcChoicesData = choices;
+
+    const labels = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T'];
+    const choicesEl = document.getElementById('quiz-choices');
+    choicesEl.innerHTML = '';
+    choices.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-choice';
+      btn.innerHTML = `<span class="choice-badge">${labels[i] || i+1}</span><span style="flex:1">${c.content}</span>`;
+      btn.onclick = () => this.toggleMcChoice(btn, i);
+      choicesEl.appendChild(btn);
+    });
+  },
+
+  toggleMcChoice(btn, idx) {
+    if (this.answered) return;
+    if (this.mcSelectedSet.has(idx)) {
+      this.mcSelectedSet.delete(idx);
+      btn.classList.remove('selected');
+    } else {
+      this.mcSelectedSet.add(idx);
+      btn.classList.add('selected');
+    }
+    document.getElementById('mc-confirm-btn').disabled = this.mcSelectedSet.size === 0;
+  },
+
+  async confirmMultipleChoice() {
+    const p = this.problems[this.current];
+    if (this.answered) return;
+    this.answered = true;
+    document.getElementById('mc-confirm-btn').disabled = true;
+
+    // 全正解インデックスのセットと比較
+    const correctIdxs = new Set(this.mcChoicesData.map((c, i) => c.isCorrect ? i : -1).filter(i => i >= 0));
+    const isCorrect = correctIdxs.size === this.mcSelectedSet.size &&
+      [...correctIdxs].every(i => this.mcSelectedSet.has(i));
+    if (isCorrect) this.correctCount++;
+
+    const elapsed = Math.round((Date.now() - this.problemStartTime) / 1000);
+    this.problemTimes[p.num] = elapsed;
+    await Data.recordResult(State.currentSet.name, p.num, isCorrect, elapsed);
+    this.sessionResults.push({ num: p.num, isCorrect });
+
+    // 選択肢を4色で色分け
+    document.querySelectorAll('#quiz-choices .quiz-choice').forEach((btn, i) => {
+      btn.style.pointerEvents = 'none';
+      btn.classList.remove('selected');
+      const c = this.mcChoicesData[i];
+      if (this.mcSelectedSet.has(i) && c.isCorrect) btn.classList.add('sel-correct');
+      else if (this.mcSelectedSet.has(i) && !c.isCorrect) btn.classList.add('sel-wrong');
+      else if (!this.mcSelectedSet.has(i) && c.isCorrect) btn.classList.add('missed');
+    });
+
+    // フィードバック表示
+    const answerArea = document.getElementById('quiz-answer-area');
+    const exEl = document.getElementById('quiz-explanation-content');
+    const label = document.getElementById('quiz-answer-label');
+    const resultLine = isCorrect
+      ? '<div style="color:var(--correct);font-weight:700;margin-bottom:8px">正解！</div>'
+      : '<div style="color:var(--accent);font-weight:700;margin-bottom:8px">不正解</div>'
+        + '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">正解の選択肢：</div>'
+        + '<div style="font-size:14px;line-height:1.8">'
+        + (p.corrects || []).map(c => `・${c.content}`).join('<br>')
+        + '</div>';
+
+    if (p.explanation) {
+      label.style.display = '';
+      exEl.innerHTML = resultLine + (p.explanationType === 'image'
+        ? `<img src="${p.explanation}" style="width:100%;border-radius:8px;margin-top:10px">`
+        : `<div style="margin-top:10px;font-size:14px">${p.explanation}</div>`);
+    } else {
+      label.style.display = 'none';
+      exEl.innerHTML = resultLine;
+    }
+    answerArea.classList.add('show');
   },
 
   renderOrder(p) {
@@ -1585,38 +1760,6 @@ const Quiz = {
     answerArea.classList.add('show');
   },
 
-  async answer(btn, isCorrect, p) {
-    if (this.answered) return;
-    this.answered = true;
-    if (isCorrect) this.correctCount++;
-
-    const elapsed = Math.round((Date.now() - this.problemStartTime) / 1000);
-    this.problemTimes[p.num] = elapsed;
-    await Data.recordResult(State.currentSet.name, p.num, isCorrect, elapsed);
-    this.sessionResults.push({ num: p.num, isCorrect });
-
-    // Mark all choices
-    document.querySelectorAll('.quiz-choice').forEach(b => {
-      b.style.pointerEvents = 'none';
-      if (b === btn) b.classList.add(isCorrect ? 'correct' : 'wrong');
-      if (!isCorrect && b.dataset.correct === '1') b.classList.add('correct');
-    });
-
-    // Explanation
-    const answerArea = document.getElementById('quiz-answer-area');
-    const exEl = document.getElementById('quiz-explanation-content');
-    const label = document.getElementById('quiz-answer-label');
-    if (p.explanation) {
-      label.style.display = '';
-      exEl.innerHTML = p.explanationType === 'image'
-        ? `<img src="${p.explanation}" style="width:100%;border-radius:8px">`
-        : `<span>${p.explanation}</span>`;
-    } else {
-      label.style.display = 'none';
-      exEl.textContent = isCorrect ? '正解！' : `不正解。正解: ${p.correctType === 'text' ? p.correct : '（画像）'}`;
-    }
-    answerArea.classList.add('show');
-  },
 
   next() {
     this.current++;
@@ -2118,7 +2261,7 @@ const ImgEditor = {
 };
 
 // ===== Boot =====
-App.init();
+App.init().catch(console.error);
 </script>
 </body>
 </html>

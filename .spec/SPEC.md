@@ -1,126 +1,61 @@
 # SPEC - 技術仕様・要件定義
 
 ## 機能概要
-既存の4択問題に加え、「整序問題」タイプを追加する。
-整序問題は複数の選択肢をシャッフル表示し、ユーザーが正しい順番にタップして回答する形式。
+アプリ起動時に前回使用したフォルダを IndexedDB に記憶し、次回起動時に1タップで再開できるようにする。
 
 ---
 
-## データ構造
+## 技術方針
+- `FileSystemDirectoryHandle` は IndexedDB に保存可能（localStorage 不可）
+- ブラウザのセキュリティ制約により、パーミッション復元にはユーザー操作（タップ）が必要
+- `handle.queryPermission()` で現在のパーミッション状態を確認
+- `handle.requestPermission({ mode: 'readwrite' })` でパーミッションを要求
 
-### ファイル構成（問題フォルダ内）
+---
+
+## ウェルカム画面 UI
+
+### 初回起動（IndexedDB にハンドルなし）
 ```
-[quiz-set-name]/
-└── 001/
-    ├── type.txt          ← "order" を書き込む（存在しない場合は既存の4択問題）
-    ├── question.txt      ← 問題文（既存と同じ）
-    ├── item1.txt         ← 1番目の正解順の選択肢
-    ├── item2.txt         ← 2番目
-    ├── ...
-    ├── item20.txt        ← 最大20個
-    └── explanation.txt   ← 解説（任意、既存と同じ）
+📚 StudyApp
+通勤中でも手軽に勉強できる
+あなただけの学習アプリ
+
+[📁 フォルダを選択して始める]
 ```
 
-### メモリ上の問題オブジェクト拡張
-```js
-{
-  num, handle,
-  problemType: 'multiple-choice' | 'order',   // 新フィールド（既存はデフォルト 'multiple-choice'）
+### 2回目以降（IndexedDB にハンドルあり）
+```
+📚 StudyApp
+前回のフォルダ: {フォルダ名}
 
-  // multiple-choice のみ
-  questionType, question, correctType, correct, wrongs, explanationType, explanation,
-
-  // order のみ
-  questionType, question,                      // 問題文（既存と共通）
-  items: [{ type: 'text'|'image', content }],  // 正解順に並んだ選択肢（最大20）
-  explanationType, explanation,                // 解説（既存と共通）
-}
+[▶ 前回のフォルダで始める]   ← メインボタン（primary）
+[📁 別のフォルダを選択]       ← サブボタン（secondary）
 ```
 
 ---
 
-## ProblemIO 変更
+## 実装詳細
 
-### load()
-1. `type.txt` を読み込み、値が `"order"` なら `problemType = 'order'` をセット
-2. `order` の場合：`item1.txt`〜`item20.txt` を順に読み込み `items[]` に格納（存在しないものはスキップ）
-3. `order` の場合：`correct.txt` / `wrong*.txt` は読み込まない
-4. 存在しない場合（既存問題）：`problemType = 'multiple-choice'`
+### IndexedDB 操作
+- DB名: `studyapp-db`
+- ストア名: `workspace`
+- キー: `'handle'`
+- 値: `FileSystemDirectoryHandle` オブジェクト
 
-### save()
-1. `order` の場合：`type.txt` に `"order"` を書き込む
-2. `order` の場合：`items[i]` を `item(i+1).txt` として書き込む
-3. `order` の場合：`correct.txt` / `wrong*.txt` を書き込まない（既存があれば削除）
-4. `multiple-choice` の場合：`type.txt` を書き込まない（既存との後方互換）
+### 起動フロー
+1. `App.init()` で IndexedDB から handle を読み込む
+2. handle が存在する場合 → ウェルカム画面を「前回フォルダあり」モードで表示
+3. 「前回のフォルダで始める」タップ
+   - `handle.queryPermission({ mode: 'readwrite' })` を確認
+   - `'granted'` なら即座に開始
+   - それ以外なら `handle.requestPermission({ mode: 'readwrite' })` を呼び出す
+   - 許可されれば開始、拒否されれば「別のフォルダを選択してください」トーストを表示
+4. 「別のフォルダを選択」タップ → 従来通り `showDirectoryPicker()` を呼び出す
+5. フォルダ選択成功時は常に IndexedDB に handle を上書き保存
 
----
-
-## エディタ（Editor）変更
-
-### 問題タイプ切り替えタブ
-エディタ上部に「問題タイプ」タブを追加：
-- `4択問題`（既存）
-- `整序問題`（新規）
-
-### 整序問題エディタ UI
-```
-[ 問題タイプ: 4択問題 | 整序問題 ]
-[ 問題 テキスト/画像 ] ... 既存と同じ
-
-[ 選択肢（正解順）]
-  ① [テキスト入力]  [✕]
-  ② [テキスト入力]  [✕]
-  ③ [テキスト入力]  [✕]
-  [ ＋ 選択肢を追加 ]  ← 最大20個まで
-
-[ 解説（任意） ] ... 既存と同じ
-```
-- 上から順に「正解の順番」（①が1番目）
-- 選択肢は最大20個（上限超えたら＋ボタンを非表示）
-- テキスト入力のみ（MVP）
-
-### バリデーション
-- 選択肢が2個未満のとき保存不可（エラートースト）
-
----
-
-## クイズ画面（Quiz）変更
-
-### 整序問題の render()
-```
-[ 問題文 ]
-
-[ 回答エリア（選択した順に並ぶ）]
-  ① ___  ② ___  ...（空きスロット）
-
-[ 選択肢エリア（シャッフル） ]
-  [A] [B] [C] [D] ...（まだ選んでいないもの）
-
-[ 回答確定ボタン ] ← 全スロットが埋まったら有効
-```
-
-### タップ操作
-- 選択肢エリアのアイテムをタップ → 回答エリアの次の空スロットに追加
-- 回答エリアのアイテムをタップ → 取り消し（選択肢エリアに戻す）
-- 全スロットが埋まったら「回答確定」ボタンが押せる状態になる
-
-### 正誤判定
-- 回答確定後、回答順と `items` の順序を比較
-- 完全一致で正解、1つでも違えば不正解
-
-### フィードバック表示
-- 正解の場合：「正解！」表示 + 解説（あれば）
-- 不正解の場合：回答エリアの各スロットを正誤カラーで色分け + 正解順を表示
-  - 例：「正解の順番: ①A ②C ③B」
-
-### 統計記録
-- `Data.recordResult()` は既存と同様に呼び出す（isCorrect の基準が完全一致になるだけ）
-
----
-
-## 既存機能との互換性
-- `type.txt` が存在しない問題はすべて `multiple-choice` として扱う（後方互換）
-- 問題一覧（problem-item）に問題タイプのラベルを追加：整序問題には「🔢」アイコン表示
+### エラー対応
+- フォルダが削除・移動されていた場合：パーミッション失敗 → トースト表示、通常選択へ誘導
 
 ---
 
