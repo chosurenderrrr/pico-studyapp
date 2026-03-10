@@ -2,47 +2,31 @@
 
 ## タスク一覧
 
-### Phase 1: IndexedDB ユーティリティ
-- [x] `IDB` オブジェクトを追加（`open()`, `saveHandle()`, `loadHandle()`）
+### Feature 1: 処理の高速化
+- [x] `ProblemIO.loadAll`：全問題を `Promise.all` で並列読み込みに変更
+- [x] `ProblemIO.load`：内部の独立したファイル読み込みを並列化
+- [x] `ProblemIO.save`：独立した書き込みを `Promise.all` で並列化
 
-### Phase 2: ウェルカム画面 HTML 変更
-- [x] 「前回フォルダなし」モードのHTMLを維持（初期状態）
-- [x] 「前回フォルダあり」モード用の要素を追加（フォルダ名表示・「前回で始める」ボタン・「別のフォルダ」ボタン）
+### Feature 2: 「出題時の表示数」廃止
+- [x] エディタから `#mc-display-count-section` の HTML を削除
+- [x] `ProblemIO.save` から `display_count.txt` 書き込みを削除
+- [x] `ProblemIO.load` から `display_count.txt` 読み込みを削除
+- [x] クイズ処理（`Quiz`）で `displayCount` を使わず全選択肢を使用するよう変更
 
-### Phase 3: App.init() 変更
-- [x] IndexedDB から handle を読み込み、存在すればウェルカム画面を「前回フォルダあり」モードに切り替え
+### Feature 3: 整序問題にダミー選択肢を追加
+- [x] `ProblemIO.load`：`dummy1.txt`〜`dummyN.txt` を読み込み `p.dummies[]` に格納
+- [x] `ProblemIO.save`：`dummies[]` を `dummy1.txt`〜`dummyN.txt` として書き込み
+- [x] エディタ：「ダミーの選択肢」セクション HTML を追加
+- [x] エディタ：`Editor.load` でダミー選択肢を読み込み表示
+- [x] エディタ：`Editor.save` でダミー選択肢を収集
+- [x] クイズ：整序問題の選択肢を `items + dummies` のシャッフルに変更
+- [x] クイズ：スロット数を `items.length` のみに変更（ダミーはスロット対象外）
 
-### Phase 4: 「前回のフォルダで始める」処理
-- [x] `App.resumeWorkspace()` を実装（queryPermission → requestPermission → 成功時 Data.init() → loadHome()）
-- [x] 失敗時のトースト表示とフォールバック
+### Feature 4: 保存ボタンをコンテンツ末尾に追加
+- [x] エディタ末尾（削除ボタンの上）に保存ボタンを追加
 
-### Phase 5: フォルダ選択時の handle 保存
-- [x] `App.selectWorkspace()` 成功時に IndexedDB へ handle を保存
-
-### Phase 6: 動作確認（フォルダ記憶）
-- [x] 初回：フォルダ選択 → 保存される
-- [x] 2回目：「前回のフォルダで始める」で即開始できる
-- [x] フォルダ変更：「別のフォルダを選択」で上書き保存される
-- [x] Android Chrome で動作確認
-
----
-
-## プログレスバー機能
-
-### Phase 7: オーバーレイ HTML/CSS 追加
-- [x] `<div id="loading-overlay">` をHTMLに追加（スピナー＋メッセージ）
-- [x] CSS でオーバーレイスタイルを定義（全画面・z-index最前面・pointer-events:all）
-
-### Phase 8: 読み込み処理への組み込み
-- [x] 問題一式読み込み開始時にオーバーレイを表示
-- [x] 読み込み完了（成功・失敗）時にオーバーレイを非表示
-- [x] ファイル数が確定している場合は `n / total` 進捗を表示
-
-### Phase 9: 保存処理への組み込み
-- [x] 問題保存開始時にオーバーレイを表示（「保存中...」）
-- [x] 保存完了（成功・失敗）時にオーバーレイを非表示
-
-### Phase 10: 動作確認
-- [ ] 読み込み中にボタンや画面遷移がブロックされることを確認
-- [ ] 保存中にボタンや画面遷移がブロックされることを確認
-- [ ] 読み込み完了後・保存完了後にオーバーレイが消えることを確認
+### 動作確認
+- [ ] 高速化：問題数が多いセットで読み込み時間が短縮されることを確認
+- [ ] 表示数廃止：既存データのあるセットで全選択肢が表示されることを確認
+- [ ] ダミー選択肢：整序問題でダミーが混在して出題されることを確認
+- [ ] 保存ボタン：末尾の保存ボタンで正常に保存されることを確認

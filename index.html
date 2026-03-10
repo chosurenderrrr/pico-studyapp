@@ -545,9 +545,16 @@
 
     <!-- 整序選択肢 -->
     <div class="editor-section" id="order-section" style="display:none">
-      <div class="editor-label" style="color:var(--primary)">🔢 選択肢（上から順番が正解順）</div>
+      <div class="editor-label" style="color:var(--primary)">🔢 正解の選択肢（上から順番が正解順）</div>
       <div id="order-items"></div>
       <button class="add-choice-btn" id="add-order-item-btn" onclick="Editor.addOrderItem()">＋ 選択肢を追加</button>
+    </div>
+
+    <!-- 整序ダミー -->
+    <div class="editor-section" id="order-dummy-section" style="display:none">
+      <div class="editor-label" style="color:var(--accent)">✗ ダミーの選択肢（不正解・任意）</div>
+      <div id="order-dummies"></div>
+      <button class="add-choice-btn" id="add-order-dummy-btn" onclick="Editor.addOrderDummy()">＋ ダミーを追加</button>
     </div>
 
     <!-- 正解プール -->
@@ -562,15 +569,6 @@
       <div class="editor-label" style="color:var(--accent)">✗ 誤答の選択肢</div>
       <div id="wrong-choices"></div>
       <button class="add-choice-btn" id="add-wrong-btn" onclick="Editor.addWrongChoice()">＋ 誤答を追加</button>
-    </div>
-
-    <!-- 出題時の表示数 -->
-    <div class="editor-section" id="mc-display-count-section">
-      <div class="editor-label">出題時の表示数</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <input type="number" id="display-count" min="2" value="4" style="width:80px">
-        <span style="font-size:13px;color:var(--text-secondary)">個（正解数より大きい値を設定）</span>
-      </div>
     </div>
 
     <!-- 解説 -->
@@ -590,6 +588,10 @@
           <button class="btn secondary small" id="ex-edit-btn" style="display:none" onclick="Editor.openEditor('explanation')">✏️ 編集</button>
         </div>
       </div>
+    </div>
+
+    <div style="margin-top:8px">
+      <button class="btn" onclick="Editor.save()">保存</button>
     </div>
 
     <div id="editor-delete-area" style="display:none;margin-top:8px">
@@ -935,57 +937,61 @@ const ProblemIO = {
   async loadAll(setHandle, onProgress) {
     const dirs = await FS.listDirs(setHandle);
     const numDirs = dirs.filter(d => /^\d+$/.test(d.name));
-    const problems = [];
-    for (let i = 0; i < numDirs.length; i++) {
-      const p = await this.load(numDirs[i].handle, parseInt(numDirs[i].name));
-      if (p) problems.push(p);
-      if (onProgress) onProgress(i + 1, numDirs.length);
-    }
-    return problems;
+    let done = 0;
+    const results = await Promise.all(numDirs.map(async d => {
+      const p = await this.load(d.handle, parseInt(d.name));
+      done++;
+      if (onProgress) onProgress(done, numDirs.length);
+      return p;
+    }));
+    return results.filter(Boolean).sort((a, b) => a.num - b.num);
   },
 
   async load(handle, num) {
     const typeTxt = await FS.readText(handle, 'type.txt');
     const isOrder = (typeTxt || '').trim() === 'order';
-    const p = { num, handle, problemType: isOrder ? 'order' : 'multiple-choice', title: '', questionType: 'text', question: '', corrects: [], wrongs: [], displayCount: 4, items: [], explanationType: 'text', explanation: '' };
+    const p = { num, handle, problemType: isOrder ? 'order' : 'multiple-choice', title: '', questionType: 'text', question: '', corrects: [], wrongs: [], items: [], dummies: [], explanationType: 'text', explanation: '' };
 
-    // Title (全問題タイプ共通)
-    const titleTxt = await FS.readText(handle, 'title.txt');
-    if (titleTxt !== null) p.title = titleTxt.trim();
+    // 並列読み込み
+    const keys = ['title', 'qText', 'exText'];
+    const reads = [
+      FS.readText(handle, 'title.txt'),
+      FS.readText(handle, 'question.txt'),
+      FS.readText(handle, 'explanation.txt'),
+    ];
+    if (isOrder) {
+      for (let i = 1; i <= 20; i++) { keys.push(`item${i}`); reads.push(FS.readText(handle, `item${i}.txt`)); }
+      for (let i = 1; i <= 20; i++) { keys.push(`dummy${i}`); reads.push(FS.readText(handle, `dummy${i}.txt`)); }
+    } else {
+      for (let i = 1; i <= 20; i++) { keys.push(`correct${i}`); reads.push(FS.readText(handle, `correct${i}.txt`)); }
+      for (let i = 1; i <= 20; i++) { keys.push(`wrong${i}`); reads.push(FS.readText(handle, `wrong${i}.txt`)); }
+    }
+    const vals = await Promise.all(reads);
+    const r = Object.fromEntries(keys.map((k, i) => [k, vals[i]]));
 
-    // Question
-    const qTxt = await FS.readText(handle, 'question.txt');
-    if (qTxt !== null) { p.question = qTxt; p.questionType = 'text'; }
+    if (r.title !== null) p.title = r.title.trim();
+
+    if (r.qText !== null) { p.question = r.qText; p.questionType = 'text'; }
     else {
       const img = await FS.readImageAsDataURL(handle, 'question.png') || await FS.readImageAsDataURL(handle, 'question.jpg');
       if (img) { p.question = img; p.questionType = 'image'; }
     }
 
     if (isOrder) {
-      // 整序問題: item1.txt〜item20.txt を読み込む
-      for (let i = 1; i <= 20; i++) {
-        const txt = await FS.readText(handle, `item${i}.txt`);
-        if (txt !== null) p.items.push({ type: 'text', content: txt });
-      }
+      for (let i = 1; i <= 20; i++) { if (r[`item${i}`] !== null) p.items.push({ type: 'text', content: r[`item${i}`] }); }
+      for (let i = 1; i <= 20; i++) { if (r[`dummy${i}`] !== null) p.dummies.push({ type: 'text', content: r[`dummy${i}`] }); }
     } else {
-      // 選択問題: correct1〜N.txt / wrong1〜N.txt / display_count.txt
       for (let i = 1; i <= 20; i++) {
-        const txt = await FS.readText(handle, `correct${i}.txt`);
-        if (txt === null) break;
-        p.corrects.push({ type: 'text', content: txt });
+        if (r[`correct${i}`] === null) break;
+        p.corrects.push({ type: 'text', content: r[`correct${i}`] });
       }
       for (let i = 1; i <= 20; i++) {
-        const txt = await FS.readText(handle, `wrong${i}.txt`);
-        if (txt === null) break;
-        p.wrongs.push({ type: 'text', content: txt });
+        if (r[`wrong${i}`] === null) break;
+        p.wrongs.push({ type: 'text', content: r[`wrong${i}`] });
       }
-      const dcTxt = await FS.readText(handle, 'display_count.txt');
-      p.displayCount = dcTxt ? parseInt(dcTxt.trim()) : p.corrects.length + p.wrongs.length;
     }
 
-    // Explanation
-    const exTxt = await FS.readText(handle, 'explanation.txt');
-    if (exTxt !== null) { p.explanation = exTxt; p.explanationType = 'text'; }
+    if (r.exText !== null) { p.explanation = r.exText; p.explanationType = 'text'; }
     else {
       const img = await FS.readImageAsDataURL(handle, 'explanation.png') || await FS.readImageAsDataURL(handle, 'explanation.jpg');
       if (img) { p.explanation = img; p.explanationType = 'image'; }
@@ -999,52 +1005,64 @@ const ProblemIO = {
     const dir = await FS.getDir(setHandle, String(num).padStart(3, '0'), true);
     problem.handle = dir;
 
-    // Title (全問題タイプ共通)
+    const writes = [];
+
     if (problem.title && problem.title.trim()) {
-      await FS.writeText(dir, 'title.txt', problem.title.trim());
+      writes.push(FS.writeText(dir, 'title.txt', problem.title.trim()));
     }
 
     if (problem.questionType === 'text') {
-      await FS.writeText(dir, 'question.txt', problem.question);
+      writes.push(FS.writeText(dir, 'question.txt', problem.question));
     } else {
-      await this._saveDataURL(dir, 'question.png', problem.question);
+      writes.push(this._saveDataURL(dir, 'question.png', problem.question));
     }
 
     if (problem.problemType === 'order') {
-      await FS.writeText(dir, 'type.txt', 'order');
+      writes.push(FS.writeText(dir, 'type.txt', 'order'));
       for (let i = 0; i < problem.items.length; i++) {
-        await FS.writeText(dir, `item${i+1}.txt`, problem.items[i].content);
+        writes.push(FS.writeText(dir, `item${i+1}.txt`, problem.items[i].content));
       }
-      // 余分な item スロットを削除
       for (let i = problem.items.length + 1; i <= 20; i++) {
-        try { await dir.removeEntry(`item${i}.txt`); } catch {}
+        writes.push(dir.removeEntry(`item${i}.txt`).catch(() => {}));
       }
-      // 既存の correct/wrong ファイルがあれば削除
+      const dummies = problem.dummies || [];
+      for (let i = 0; i < dummies.length; i++) {
+        writes.push(FS.writeText(dir, `dummy${i+1}.txt`, dummies[i].content));
+      }
+      for (let i = dummies.length + 1; i <= 20; i++) {
+        writes.push(dir.removeEntry(`dummy${i}.txt`).catch(() => {}));
+      }
       for (let i = 1; i <= 20; i++) {
-        try { await dir.removeEntry(`correct${i}.txt`); } catch {}
-        try { await dir.removeEntry(`wrong${i}.txt`); } catch {}
+        writes.push(dir.removeEntry(`correct${i}.txt`).catch(() => {}));
+        writes.push(dir.removeEntry(`wrong${i}.txt`).catch(() => {}));
       }
+      writes.push(dir.removeEntry('display_count.txt').catch(() => {}));
     } else {
-      // 選択問題: correct1〜N.txt / wrong1〜N.txt / display_count.txt
       for (let i = 0; i < problem.corrects.length; i++) {
-        await FS.writeText(dir, `correct${i+1}.txt`, problem.corrects[i].content);
+        writes.push(FS.writeText(dir, `correct${i+1}.txt`, problem.corrects[i].content));
       }
       for (let i = problem.corrects.length + 1; i <= 20; i++) {
-        try { await dir.removeEntry(`correct${i}.txt`); } catch {}
+        writes.push(dir.removeEntry(`correct${i}.txt`).catch(() => {}));
       }
       for (let i = 0; i < problem.wrongs.length; i++) {
-        await FS.writeText(dir, `wrong${i+1}.txt`, problem.wrongs[i].content);
+        writes.push(FS.writeText(dir, `wrong${i+1}.txt`, problem.wrongs[i].content));
       }
       for (let i = problem.wrongs.length + 1; i <= 20; i++) {
-        try { await dir.removeEntry(`wrong${i}.txt`); } catch {}
+        writes.push(dir.removeEntry(`wrong${i}.txt`).catch(() => {}));
       }
-      await FS.writeText(dir, 'display_count.txt', String(problem.displayCount));
+      writes.push(dir.removeEntry('type.txt').catch(() => {}));
+      for (let i = 1; i <= 20; i++) {
+        writes.push(dir.removeEntry(`item${i}.txt`).catch(() => {}));
+        writes.push(dir.removeEntry(`dummy${i}.txt`).catch(() => {}));
+      }
     }
 
     if (problem.explanation) {
-      if (problem.explanationType === 'text') await FS.writeText(dir, 'explanation.txt', problem.explanation);
-      else await this._saveDataURL(dir, 'explanation.png', problem.explanation);
+      if (problem.explanationType === 'text') writes.push(FS.writeText(dir, 'explanation.txt', problem.explanation));
+      else writes.push(this._saveDataURL(dir, 'explanation.png', problem.explanation));
     }
+
+    await Promise.all(writes);
 
     return problem;
   },
@@ -1249,10 +1267,11 @@ const Editor = {
     this.problemType = isOrder ? 'order' : 'multiple-choice';
     this._resetTabs('problem-type-tabs', isOrder ? 1 : 0);
     document.getElementById('order-section').style.display = isOrder ? '' : 'none';
+    document.getElementById('order-dummy-section').style.display = isOrder ? '' : 'none';
     document.getElementById('mc-correct-section').style.display = isOrder ? 'none' : '';
     document.getElementById('mc-wrong-section').style.display = isOrder ? 'none' : '';
-    document.getElementById('mc-display-count-section').style.display = isOrder ? 'none' : '';
     document.getElementById('order-items').innerHTML = '';
+    document.getElementById('order-dummies').innerHTML = '';
 
     // Reset tabs
     this._resetTabs('q-type-tabs', 0);
@@ -1271,7 +1290,6 @@ const Editor = {
     document.getElementById('correct-choices').innerHTML = '';
     document.getElementById('wrong-choices').innerHTML = '';
     document.getElementById('problem-title').value = '';
-    document.getElementById('display-count').value = 4;
 
     if (!problem) { this.addCorrectItem(); this.addWrongChoice(); return; }
 
@@ -1291,12 +1309,12 @@ const Editor = {
     if (isOrder) {
       (problem.items || []).forEach(item => this.addOrderItem(item));
       if (!problem.items || problem.items.length === 0) this.addOrderItem();
+      (problem.dummies || []).forEach(d => this.addOrderDummy(d));
     } else {
       (problem.corrects || []).forEach(c => this.addCorrectItem(c));
       if (!problem.corrects || problem.corrects.length === 0) this.addCorrectItem();
       (problem.wrongs || []).forEach(w => this.addWrongChoice(w));
       if (!problem.wrongs || problem.wrongs.length === 0) this.addWrongChoice();
-      document.getElementById('display-count').value = problem.displayCount || (problem.corrects.length + problem.wrongs.length);
     }
 
     if (problem.explanationType === 'image') {
@@ -1315,9 +1333,9 @@ const Editor = {
     if (btn) { btn.closest('.content-type-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
     const isOrder = type === 'order';
     document.getElementById('order-section').style.display = isOrder ? '' : 'none';
+    document.getElementById('order-dummy-section').style.display = isOrder ? '' : 'none';
     document.getElementById('mc-correct-section').style.display = isOrder ? 'none' : '';
     document.getElementById('mc-wrong-section').style.display = isOrder ? 'none' : '';
-    document.getElementById('mc-display-count-section').style.display = isOrder ? 'none' : '';
     if (isOrder && document.getElementById('order-items').children.length === 0) this.addOrderItem();
     if (!isOrder && document.getElementById('correct-choices').children.length === 0) this.addCorrectItem();
     if (!isOrder && document.getElementById('wrong-choices').children.length === 0) this.addWrongChoice();
@@ -1350,6 +1368,31 @@ const Editor = {
       row.querySelector('.choice-label').textContent = i + 1;
       row.querySelector('textarea').placeholder = `選択肢 ${i + 1}`;
     });
+  },
+
+  addOrderDummy(data) {
+    const container = document.getElementById('order-dummies');
+    if (container.children.length >= 20) return;
+    const i = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'choice-row';
+    const val = data ? data.content : '';
+    div.innerHTML = `
+      <span class="choice-label wrong" style="min-width:30px">${i + 1}</span>
+      <textarea placeholder="ダミー ${i + 1}" style="min-height:40px">${val}</textarea>
+      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeOrderDummy(this)">✕</button>`;
+    container.appendChild(div);
+    document.getElementById('add-order-dummy-btn').style.display = container.children.length >= 20 ? 'none' : '';
+  },
+
+  removeOrderDummy(btn) {
+    btn.closest('.choice-row').remove();
+    document.querySelectorAll('#order-dummies .choice-row').forEach((row, i) => {
+      row.querySelector('.choice-label').textContent = i + 1;
+      row.querySelector('textarea').placeholder = `ダミー ${i + 1}`;
+    });
+    document.getElementById('add-order-dummy-btn').style.display =
+      document.getElementById('order-dummies').children.length >= 20 ? 'none' : '';
   },
 
   _resetTabs(containerId, activeIdx) {
@@ -1459,15 +1502,20 @@ const Editor = {
     if (!problem.question) { showToast('問題を入力してください'); return; }
 
     if (this.problemType === 'order') {
-      // 整序問題: items を収集
+      // 整序問題: items + dummies を収集
       problem.items = [];
       document.querySelectorAll('#order-items textarea').forEach(ta => {
         const t = ta.value.trim();
         if (t) problem.items.push({ type: 'text', content: t });
       });
       if (problem.items.length < 2) { showToast('選択肢を2つ以上入力してください'); return; }
+      problem.dummies = [];
+      document.querySelectorAll('#order-dummies textarea').forEach(ta => {
+        const t = ta.value.trim();
+        if (t) problem.dummies.push({ type: 'text', content: t });
+      });
     } else {
-      // 選択問題: corrects / wrongs / displayCount を収集
+      // 選択問題: corrects / wrongs を収集
       problem.corrects = [];
       document.querySelectorAll('#correct-choices textarea').forEach(ta => {
         const t = ta.value.trim();
@@ -1481,14 +1529,6 @@ const Editor = {
         if (t) problem.wrongs.push({ type: 'text', content: t });
       });
       if (problem.wrongs.length === 0) { showToast('誤答の選択肢を1つ以上入力してください'); return; }
-
-      problem.displayCount = parseInt(document.getElementById('display-count').value) || (problem.corrects.length + problem.wrongs.length);
-      if (problem.displayCount <= problem.corrects.length) {
-        showToast('表示数は正解数より大きくしてください'); return;
-      }
-      if (problem.displayCount > problem.corrects.length + problem.wrongs.length) {
-        showToast('表示数がプールの合計を超えています'); return;
-      }
     }
 
     // Explanation
@@ -1555,8 +1595,8 @@ const Quiz = {
   sessionStartTime: 0,
   problemStartTime: 0,
   problemTimes: {},
-  orderSelectedIdxs: [],
-  orderShuffledIdxs: [],
+  orderSlots: [],
+  orderAllChoices: [],
   mcSelectedSet: new Set(),   // 選択中の選択肢インデックス
   mcChoicesData: [],          // 表示中の選択肢データ [{content, isCorrect}]
 
@@ -1609,16 +1649,9 @@ const Quiz = {
   },
 
   renderMultipleChoice(p) {
-    // 正解全件 + 誤答プールから (displayCount - corrects.length) 個ランダム選択
+    // 正解全件 + 誤答全件を表示
     const corrects = (p.corrects || []).map(c => ({ content: c.content, isCorrect: true }));
-    const wrongCount = (p.displayCount || corrects.length + (p.wrongs || []).length) - corrects.length;
-    const wrongPool = [...(p.wrongs || [])];
-    // Fisher-Yates で wrongPool をシャッフルして先頭 wrongCount 個を使用
-    for (let i = wrongPool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [wrongPool[i], wrongPool[j]] = [wrongPool[j], wrongPool[i]];
-    }
-    const wrongs = wrongPool.slice(0, Math.max(0, wrongCount)).map(w => ({ content: w.content, isCorrect: false }));
+    const wrongs = (p.wrongs || []).map(w => ({ content: w.content, isCorrect: false }));
 
     // 全選択肢をシャッフル
     const choices = [...corrects, ...wrongs];
@@ -1704,12 +1737,16 @@ const Quiz = {
   },
 
   renderOrder(p) {
-    this.orderSelectedIdxs = [];
-    this.orderShuffledIdxs = p.items.map((_, i) => i);
-    for (let i = this.orderShuffledIdxs.length - 1; i > 0; i--) {
+    // 全選択肢 = 正解items + ダミー、シャッフル
+    const itemChoices = p.items.map((item, i) => ({ content: item.content, isItem: true, itemIdx: i }));
+    const dummyChoices = (p.dummies || []).map(d => ({ content: d.content, isItem: false, itemIdx: -1 }));
+    const all = [...itemChoices, ...dummyChoices];
+    for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [this.orderShuffledIdxs[i], this.orderShuffledIdxs[j]] = [this.orderShuffledIdxs[j], this.orderShuffledIdxs[i]];
+      [all[i], all[j]] = [all[j], all[i]];
     }
+    this.orderAllChoices = all;
+    this.orderSlots = new Array(p.items.length).fill(null);
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
     document.getElementById('order-confirm-btn').disabled = true;
@@ -1721,11 +1758,10 @@ const Quiz = {
     for (let pos = 0; pos < p.items.length; pos++) {
       const slot = document.createElement('div');
       slot.className = 'order-slot';
-      const selectedIdx = this.orderSelectedIdxs[pos];
-      if (selectedIdx !== undefined) {
+      const choiceIdx = this.orderSlots[pos];
+      if (choiceIdx !== null) {
         slot.classList.add('filled');
-        const item = p.items[selectedIdx];
-        slot.innerHTML = `<span class="order-slot-num">${pos + 1}</span><span class="order-slot-content">${item.content}</span>`;
+        slot.innerHTML = `<span class="order-slot-num">${pos + 1}</span><span class="order-slot-content">${this.orderAllChoices[choiceIdx].content}</span>`;
         const capturedPos = pos;
         slot.onclick = () => { if (!this.answered) this.deselectOrderItem(p, capturedPos); };
       } else {
@@ -1738,28 +1774,29 @@ const Quiz = {
   _renderOrderChoices(p) {
     const choicesEl = document.getElementById('order-choices-area');
     choicesEl.innerHTML = '';
-    for (const idx of this.orderShuffledIdxs) {
-      if (this.orderSelectedIdxs.includes(idx)) continue;
-      const item = p.items[idx];
+    this.orderAllChoices.forEach((choice, choiceIdx) => {
+      if (this.orderSlots.includes(choiceIdx)) return;
       const btn = document.createElement('button');
       btn.className = 'order-choice';
-      btn.textContent = item.content;
-      btn.onclick = () => { if (!this.answered) this.selectOrderItem(p, idx); };
+      btn.textContent = choice.content;
+      btn.onclick = () => { if (!this.answered) this.selectOrderItem(p, choiceIdx); };
       choicesEl.appendChild(btn);
-    }
+    });
   },
 
-  selectOrderItem(p, idx) {
-    this.orderSelectedIdxs.push(idx);
+  selectOrderItem(p, choiceIdx) {
+    const emptySlot = this.orderSlots.indexOf(null);
+    if (emptySlot === -1) return;
+    this.orderSlots[emptySlot] = choiceIdx;
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
-    if (this.orderSelectedIdxs.length === p.items.length) {
+    if (!this.orderSlots.includes(null)) {
       document.getElementById('order-confirm-btn').disabled = false;
     }
   },
 
   deselectOrderItem(p, pos) {
-    this.orderSelectedIdxs.splice(pos, 1);
+    this.orderSlots[pos] = null;
     document.getElementById('order-confirm-btn').disabled = true;
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
@@ -1771,7 +1808,10 @@ const Quiz = {
     this.answered = true;
     document.getElementById('order-confirm-btn').disabled = true;
 
-    const isCorrect = this.orderSelectedIdxs.every((idx, pos) => idx === pos);
+    const isCorrect = this.orderSlots.every((choiceIdx, pos) => {
+      const c = this.orderAllChoices[choiceIdx];
+      return c && c.isItem && c.itemIdx === pos;
+    });
     if (isCorrect) this.correctCount++;
 
     const elapsed = Math.round((Date.now() - this.problemStartTime) / 1000);
@@ -1783,7 +1823,9 @@ const Quiz = {
     const slots = document.querySelectorAll('#order-answer-slots .order-slot');
     slots.forEach((slot, pos) => {
       if (!slot.classList.contains('filled')) return;
-      slot.classList.add(this.orderSelectedIdxs[pos] === pos ? 'correct' : 'wrong');
+      const choiceIdx = this.orderSlots[pos];
+      const c = this.orderAllChoices[choiceIdx];
+      slot.classList.add(c && c.isItem && c.itemIdx === pos ? 'correct' : 'wrong');
     });
     // 選択肢ボタンを無効化
     document.querySelectorAll('#order-choices-area .order-choice').forEach(b => { b.disabled = true; });
