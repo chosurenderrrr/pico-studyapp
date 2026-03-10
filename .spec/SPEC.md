@@ -1,80 +1,48 @@
 # SPEC - 技術仕様・要件定義
 
 ## 機能概要
-選択肢（正解・誤答・整序アイテム・ダミー）に画像を登録・表示できるようにする。
-選択問題・整序問題の両方が対象。
+クイズ解答後に画面下部に固定アクションバーを表示し、スクロールなしで操作できるようにする。
 
 ---
 
-## 1. エディタ：選択肢行の画像対応
+## 解答後アクションバー（#quiz-action-bar）
 
-### 変更対象
-- `correct-choices`（選択問題：正解）
-- `wrong-choices`（選択問題：誤答）
-- `order-items`（整序問題：正解選択肢）
-- `order-dummies`（整序問題：ダミー）
+### 表示タイミング
+- 回答確定（confirmMultipleChoice / confirmOrder）後に表示
+- 次の問題に進む（render）時に非表示に戻す
 
-### 各選択肢行の UI
-各行に「テキスト / 画像」タブを追加する（問題文・解説の切り替えと同じパターン）。
+### 配置
+- `#view-quiz` の `.main` の兄弟要素として `.main` の下に配置（flex column の末尾）
+- `.main` が残りの高さを占め、アクションバーは画面下部に固定表示される
 
-**テキストモード（デフォルト）：**
-- 現状の textarea をそのまま使用
+### バーの内容（上から順）
+1. **結果ラベル**：「✓ 正解！」（緑）または「✗ 不正解」（赤）
+2. **ボタン行（横並び）**：
+   - 「解説を見る」ボタン：クリックで `#quiz-explanation-content` までスクロール（解説がない場合は非表示）
+   - 「次へ →」ボタン（最後の問題は「結果を見る →」）
+3. **「🏠 ホームへ」ボタン**：全幅、セカンダリスタイル
 
-**画像モード：**
-- 「📷 画像を選択」ボタン
-- 選択後はプレビュー画像を表示
-- 画像の dataURL を行の `data-img` 属性に保持
-- プレビュー横に「✕ 画像を削除」ボタン（削除でテキストモードに戻る）
-
-### データ収集（Editor.save）
-現在の `querySelectorAll('textarea')` での収集を、行ごとに以下に変更：
-- `data-type="text"` の行 → `{ type: 'text', content: textarea.value.trim() }`
-- `data-type="image"` の行 → `{ type: 'image', content: row.dataset.img }`
-- 画像モードで画像未選択の行は収集しない（スキップ）
-
-### ロード時（Editor.load）
-既存の `addOrderItem(data)` / `addCorrectItem(data)` 等に渡す `data` の
-`type === 'image'` 判定を追加し、画像モードで行を初期化する。
+### アニメーション
+- 表示時：下から滑り上がる（`slideUp` 0.2s ease-out）
 
 ---
 
-## 2. クイズ：選択肢の画像表示
+## 既存コードの変更
 
-### 共通ヘルパー関数（新規追加）
-```javascript
-function renderChoiceContent(choice) {
-  if (choice.type === 'image') {
-    return `<img src="${choice.content}" style="max-width:100%;max-height:120px;border-radius:6px;display:block;margin:4px auto">`;
-  }
-  return `<span>${choice.content}</span>`;
-}
-```
+### HTML
+- `#quiz-answer-area` 内の `quiz-next-btn` / ホームへボタンを削除
+- `#quiz-action-bar` を `.main` の外（兄弟要素）として追加
+- `quiz-answer-area` は解説内容（ラベル + テキスト）のみに縮小
 
-### 選択問題（renderMultipleChoice）
-現状：
-```javascript
-btn.innerHTML = `<span class="choice-badge">${labels[i]}</span><span style="flex:1">${c.content}</span>`;
-```
-変更後：
-```javascript
-btn.innerHTML = `<span class="choice-badge">${labels[i]}</span><span style="flex:1">${renderChoiceContent(c)}</span>`;
-```
-- `mcChoicesData` に `type` フィールドを含めるよう変更
+### JS
+- `confirmMultipleChoice` / `confirmOrder`：`quiz-answer-area.show` に加え `quiz-action-bar.show` を追加
+  - 結果ラベルテキストを設定（正解/不正解）
+  - 解説の有無で「解説を見る」ボタンの表示を切り替え
+- `render`：`quiz-action-bar` の `.show` を除去
 
-### 整序問題（_renderOrderChoices / _renderOrderSlots）
-- `btn.textContent = choice.content` → `btn.innerHTML = renderChoiceContent(choice)`
-- スロットの `order-slot-content` 内も同様に `renderChoiceContent` を使用
-
-### 不正解時の正解表示（confirmMultipleChoice）
-現状：`・${c.content}`
-変更後：画像の場合はインライン `<img>` で表示
-
----
-
-## 3. CSS 調整
-
-- 画像タイプの選択肢ボタン（`quiz-choice`, `order-choice`）が縦に広がっても崩れないよう `height: auto` を確認
-- `order-slot` が画像を内包できるよう `min-height` の調整（必要に応じて）
+### CSS
+- `#quiz-action-bar`：アニメーション付きのスタイルを追加
+- `#view-quiz .main`：アクションバー表示時に下部パディング不要（flex で自然に収まる）
 
 ---
 

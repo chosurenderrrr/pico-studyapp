@@ -2,42 +2,20 @@
 
 ## タスク一覧
 
-### Feature 1: エディタ：選択肢行の画像対応
+### Feature: 解答後アクションバー
 
-#### 選択肢行の UI 変更（共通化）
-- [x] `_makeChoiceRow(...)` ヘルパーを作成：テキスト/画像タブ付きの行を生成
-- [x] `addCorrectItem(data)` を新 UI に置き換え
-- [x] `addWrongChoice(data)` を新 UI に置き換え
-- [x] `addOrderItem(data)` を新 UI に置き換え
-- [x] `addOrderDummy(data)` を新 UI に置き換え
-- [x] `setChoiceType(btn, type)` を追加：タブ切り替え処理
-- [x] `pickChoiceImage(btn)` を追加：画像選択 → dataURL を data-img にセット
-
-#### リナンバー処理の修正
-- [x] `removeCorrectItem` / `removeWrongChoice` / `removeOrderDummy` のリナンバーを新構造に対応
-
-#### Editor.save のデータ収集変更
-- [x] `#order-items` 収集：行の type/img を判定して `{ type, content }` を構築
-- [x] `#order-dummies` 収集：同上
-- [x] `#correct-choices` 収集：同上
-- [x] `#wrong-choices` 収集：同上
-
-### Feature 2: クイズ：選択肢の画像表示
-
-- [x] `renderChoiceContent(choice)` ヘルパー関数を追加
-- [x] `renderMultipleChoice`：`mcChoicesData` に `type` フィールドを含める
-- [x] `renderMultipleChoice`：ボタン内の選択肢を `renderChoiceContent` に変更
-- [x] `renderOrder`：`orderAllChoices` に `type` フィールドを含める
-- [x] `_renderOrderChoices`：`btn.textContent` → `btn.innerHTML = renderChoiceContent(choice)` に変更
-- [x] `_renderOrderSlots`：スロット内の content 表示を `renderChoiceContent` に変更
-- [x] `confirmMultipleChoice`：不正解時の正解リスト表示を画像対応
-- [x] `confirmOrder`：不正解時の正解順番表示を画像対応
+- [x] CSS：`#quiz-action-bar` のスタイルを追加（slideUp アニメーション含む）
+- [x] HTML：`#quiz-action-bar` を `#view-quiz` の `.main` 外に追加
+- [x] HTML：`#quiz-answer-area` から `quiz-next-btn` / ホームへボタンを削除
+- [x] JS：`render()` で `#quiz-action-bar` の `.show` を除去
+- [x] JS：`confirmMultipleChoice()` でアクションバーを表示・結果ラベル設定・解説ボタン表示制御
+- [x] JS：`confirmOrder()` で同上
+- [x] JS：`scrollToExplanation()` メソッドを追加
 
 ### 動作確認
-- [ ] 選択問題：正解に画像を設定して保存・読み込みできること
-- [ ] 選択問題：誤答に画像を設定して保存・読み込みできること
-- [ ] 選択問題クイズ：画像選択肢が表示され、正誤判定が正しく動作すること
-- [ ] 整序問題：正解選択肢に画像を設定して保存・読み込みできること
-- [ ] 整序問題：ダミーに画像を設定して保存・読み込みできること
-- [ ] 整序問題クイズ：画像選択肢がボタン・スロット両方で表示されること
-- [ ] テキストと画像が混在する問題が正常に動作すること
+- [ ] 解答後にアクションバーが下から滑り上がって表示されること
+- [ ] 「解説を見る」ボタンで解説位置にスクロールすること
+- [ ] 解説がない問題では「解説を見る」ボタンが非表示になること（正解時のみ）
+- [ ] 「次へ →」で次の問題に進み、アクションバーが消えること
+- [ ] 最後の問題で「結果を見る →」と表示されること
+- [ ] 「🏠 ホームへ」でホームに戻ること
