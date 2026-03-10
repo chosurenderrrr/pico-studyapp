@@ -225,7 +225,7 @@
       padding: 20px; box-shadow: var(--shadow);
       min-height: 100px; font-size: 16px; line-height: 1.6;
     }
-    .quiz-question img { display: block; max-width: 100%; width: auto; height: auto; max-height: 40vh; margin: 0 auto; border-radius: 8px; }
+    .quiz-question img { display: block; width: 100%; max-height: 35vh; object-fit: scale-down; border-radius: 8px; }
     .quiz-choices { display: flex; flex-direction: column; gap: 10px; }
     .quiz-choice {
       background: var(--surface); border: 2px solid var(--border);
@@ -352,7 +352,7 @@
     .toast.show { opacity: 1; }
 
     /* Quiz view layout */
-    #view-quiz { height: 100vh; overflow: hidden; }
+    #view-quiz { height: 100vh; height: 100dvh; overflow: hidden; }
     #view-quiz .main { display: flex; flex-direction: column; gap: 14px; }
 
     /* Image Editor */
