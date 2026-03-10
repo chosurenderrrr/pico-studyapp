@@ -1232,17 +1232,66 @@ const Editor = {
     if (!isOrder && document.getElementById('wrong-choices').children.length === 0) this.addWrongChoice();
   },
 
+  _makeChoiceRow(labelText, labelClass, labelStyle, placeholder, removeFn, data) {
+    const isImage = data && data.type === 'image';
+    const textVal = (!isImage && data && data.content) ? data.content : '';
+    const div = document.createElement('div');
+    div.className = 'choice-row';
+    div.dataset.type = isImage ? 'image' : 'text';
+    if (isImage) div.dataset.img = data.content;
+    div.innerHTML = `
+      <span class="choice-label ${labelClass}" style="${labelStyle}">${labelText}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:4px;margin-bottom:4px">
+          <button class="tab-btn${isImage ? '' : ' active'}" style="flex:none;padding:2px 8px;font-size:12px" onclick="Editor.setChoiceType(this,'text')">T</button>
+          <button class="tab-btn${isImage ? ' active' : ''}" style="flex:none;padding:2px 8px;font-size:12px" onclick="Editor.setChoiceType(this,'image')">📷</button>
+        </div>
+        <div class="choice-text-area"${isImage ? ' style="display:none"' : ''}>
+          <textarea placeholder="${placeholder}" style="min-height:40px;width:100%">${textVal}</textarea>
+        </div>
+        <div class="choice-image-area"${isImage ? '' : ' style="display:none"'}>
+          <img class="img-preview" style="display:${isImage ? 'block' : 'none'}"${isImage ? ` src="${data.content}"` : ''}>
+          <button class="btn secondary small" onclick="Editor.pickChoiceImage(this)">📷 画像を選択</button>
+        </div>
+      </div>
+      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="${removeFn}(this)">✕</button>`;
+    return div;
+  },
+
+  setChoiceType(btn, type) {
+    const row = btn.closest('.choice-row');
+    row.dataset.type = type;
+    row.querySelector('.choice-text-area').style.display = type === 'text' ? '' : 'none';
+    row.querySelector('.choice-image-area').style.display = type === 'image' ? '' : 'none';
+    btn.closest('div').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  },
+
+  async pickChoiceImage(btn) {
+    try {
+      const [fh] = await window.showOpenFilePicker({
+        types: [{ description: '画像', accept: { 'image/*': ['.png', '.jpg', '.jpeg'] } }]
+      });
+      const file = await fh.getFile();
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = e.target.result;
+        const row = btn.closest('.choice-row');
+        row.dataset.img = data;
+        const img = row.querySelector('.choice-image-area img');
+        img.src = data; img.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast('画像の読み込みに失敗しました');
+    }
+  },
+
   addOrderItem(data) {
     const container = document.getElementById('order-items');
     if (container.children.length >= 20) return;
     const i = container.children.length;
-    const div = document.createElement('div');
-    div.className = 'choice-row';
-    const val = data ? data.content : '';
-    div.innerHTML = `
-      <span class="choice-label" style="color:var(--primary);min-width:30px">${i + 1}</span>
-      <textarea placeholder="選択肢 ${i + 1}" style="min-height:40px">${val}</textarea>
-      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeOrderItem(this)">✕</button>`;
+    const div = this._makeChoiceRow(i + 1, '', 'color:var(--primary);min-width:30px', `選択肢 ${i + 1}`, 'Editor.removeOrderItem', data);
     container.appendChild(div);
     document.getElementById('add-order-item-btn').style.display = container.children.length >= 20 ? 'none' : '';
   },
@@ -1257,7 +1306,8 @@ const Editor = {
   _renumberOrderItems() {
     document.querySelectorAll('#order-items .choice-row').forEach((row, i) => {
       row.querySelector('.choice-label').textContent = i + 1;
-      row.querySelector('textarea').placeholder = `選択肢 ${i + 1}`;
+      const ta = row.querySelector('textarea');
+      if (ta) ta.placeholder = `選択肢 ${i + 1}`;
     });
   },
 
@@ -1265,13 +1315,7 @@ const Editor = {
     const container = document.getElementById('order-dummies');
     if (container.children.length >= 20) return;
     const i = container.children.length;
-    const div = document.createElement('div');
-    div.className = 'choice-row';
-    const val = data ? data.content : '';
-    div.innerHTML = `
-      <span class="choice-label wrong" style="min-width:30px">${i + 1}</span>
-      <textarea placeholder="ダミー ${i + 1}" style="min-height:40px">${val}</textarea>
-      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeOrderDummy(this)">✕</button>`;
+    const div = this._makeChoiceRow(i + 1, 'wrong', 'min-width:30px', `ダミー ${i + 1}`, 'Editor.removeOrderDummy', data);
     container.appendChild(div);
     document.getElementById('add-order-dummy-btn').style.display = container.children.length >= 20 ? 'none' : '';
   },
@@ -1280,7 +1324,8 @@ const Editor = {
     btn.closest('.choice-row').remove();
     document.querySelectorAll('#order-dummies .choice-row').forEach((row, i) => {
       row.querySelector('.choice-label').textContent = i + 1;
-      row.querySelector('textarea').placeholder = `ダミー ${i + 1}`;
+      const ta = row.querySelector('textarea');
+      if (ta) ta.placeholder = `ダミー ${i + 1}`;
     });
     document.getElementById('add-order-dummy-btn').style.display =
       document.getElementById('order-dummies').children.length >= 20 ? 'none' : '';
@@ -1309,42 +1354,32 @@ const Editor = {
   addCorrectItem(data) {
     const container = document.getElementById('correct-choices');
     const i = container.children.length;
-    const div = document.createElement('div');
-    div.className = 'choice-row';
-    const val = (data && data.content) ? data.content : '';
-    div.innerHTML = `
-      <span class="choice-label correct">${i+1}</span>
-      <textarea placeholder="正解 ${i+1}" style="min-height:40px">${val}</textarea>
-      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeCorrectItem(this)">✕</button>`;
+    const div = this._makeChoiceRow(i + 1, 'correct', '', `正解 ${i + 1}`, 'Editor.removeCorrectItem', data);
     container.appendChild(div);
   },
 
   removeCorrectItem(btn) {
     btn.closest('.choice-row').remove();
-    document.querySelectorAll('#correct-choices .choice-label').forEach((el, i) => {
-      el.textContent = i + 1;
-      el.nextElementSibling.placeholder = `正解 ${i + 1}`;
+    document.querySelectorAll('#correct-choices .choice-row').forEach((row, i) => {
+      row.querySelector('.choice-label').textContent = i + 1;
+      const ta = row.querySelector('textarea');
+      if (ta) ta.placeholder = `正解 ${i + 1}`;
     });
   },
 
   addWrongChoice(wrongData) {
     const container = document.getElementById('wrong-choices');
     const i = container.children.length;
-    const div = document.createElement('div');
-    div.className = 'choice-row';
-    const val = (wrongData && wrongData.type === 'text') ? wrongData.content : '';
-    div.innerHTML = `
-      <span class="choice-label wrong">${i+1}</span>
-      <textarea placeholder="誤答 ${i+1}" style="min-height:40px">${val}</textarea>
-      <button style="background:none;border:none;color:var(--accent);font-size:22px;cursor:pointer;padding:4px;flex-shrink:0" onclick="Editor.removeWrongChoice(this)">✕</button>`;
+    const div = this._makeChoiceRow(i + 1, 'wrong', '', `誤答 ${i + 1}`, 'Editor.removeWrongChoice', wrongData);
     container.appendChild(div);
   },
 
   removeWrongChoice(btn) {
     btn.closest('.choice-row').remove();
-    document.querySelectorAll('#wrong-choices .choice-label').forEach((el, i) => {
-      el.textContent = i + 1;
-      el.nextElementSibling.placeholder = `誤答 ${i + 1}`;
+    document.querySelectorAll('#wrong-choices .choice-row').forEach((row, i) => {
+      row.querySelector('.choice-label').textContent = i + 1;
+      const ta = row.querySelector('textarea');
+      if (ta) ta.placeholder = `誤答 ${i + 1}`;
     });
   },
 
@@ -1395,29 +1430,45 @@ const Editor = {
     if (this.problemType === 'order') {
       // 整序問題: items + dummies を収集
       problem.items = [];
-      document.querySelectorAll('#order-items textarea').forEach(ta => {
-        const t = ta.value.trim();
-        if (t) problem.items.push({ type: 'text', content: t });
+      document.querySelectorAll('#order-items .choice-row').forEach(row => {
+        if (row.dataset.type === 'image') {
+          if (row.dataset.img) problem.items.push({ type: 'image', content: row.dataset.img });
+        } else {
+          const t = row.querySelector('textarea').value.trim();
+          if (t) problem.items.push({ type: 'text', content: t });
+        }
       });
       if (problem.items.length < 2) { showToast('選択肢を2つ以上入力してください'); return; }
       problem.dummies = [];
-      document.querySelectorAll('#order-dummies textarea').forEach(ta => {
-        const t = ta.value.trim();
-        if (t) problem.dummies.push({ type: 'text', content: t });
+      document.querySelectorAll('#order-dummies .choice-row').forEach(row => {
+        if (row.dataset.type === 'image') {
+          if (row.dataset.img) problem.dummies.push({ type: 'image', content: row.dataset.img });
+        } else {
+          const t = row.querySelector('textarea').value.trim();
+          if (t) problem.dummies.push({ type: 'text', content: t });
+        }
       });
     } else {
       // 選択問題: corrects / wrongs を収集
       problem.corrects = [];
-      document.querySelectorAll('#correct-choices textarea').forEach(ta => {
-        const t = ta.value.trim();
-        if (t) problem.corrects.push({ type: 'text', content: t });
+      document.querySelectorAll('#correct-choices .choice-row').forEach(row => {
+        if (row.dataset.type === 'image') {
+          if (row.dataset.img) problem.corrects.push({ type: 'image', content: row.dataset.img });
+        } else {
+          const t = row.querySelector('textarea').value.trim();
+          if (t) problem.corrects.push({ type: 'text', content: t });
+        }
       });
       if (problem.corrects.length === 0) { showToast('正解の選択肢を1つ以上入力してください'); return; }
 
       problem.wrongs = [];
-      document.querySelectorAll('#wrong-choices textarea').forEach(ta => {
-        const t = ta.value.trim();
-        if (t) problem.wrongs.push({ type: 'text', content: t });
+      document.querySelectorAll('#wrong-choices .choice-row').forEach(row => {
+        if (row.dataset.type === 'image') {
+          if (row.dataset.img) problem.wrongs.push({ type: 'image', content: row.dataset.img });
+        } else {
+          const t = row.querySelector('textarea').value.trim();
+          if (t) problem.wrongs.push({ type: 'text', content: t });
+        }
       });
       if (problem.wrongs.length === 0) { showToast('誤答の選択肢を1つ以上入力してください'); return; }
     }
@@ -1476,6 +1527,14 @@ const Editor = {
     } catch { showToast('削除に失敗しました'); }
   }
 };
+
+// ===== Choice Content Renderer =====
+function renderChoiceContent(choice) {
+  if (choice && choice.type === 'image') {
+    return `<img src="${choice.content}" style="max-width:100%;max-height:120px;border-radius:6px;display:block;margin:4px auto">`;
+  }
+  return `<span>${choice ? choice.content : ''}</span>`;
+}
 
 // ===== Quiz =====
 const Quiz = {
@@ -1543,8 +1602,8 @@ const Quiz = {
 
   renderMultipleChoice(p) {
     // 正解全件 + 誤答全件を表示
-    const corrects = (p.corrects || []).map(c => ({ content: c.content, isCorrect: true }));
-    const wrongs = (p.wrongs || []).map(w => ({ content: w.content, isCorrect: false }));
+    const corrects = (p.corrects || []).map(c => ({ type: c.type, content: c.content, isCorrect: true }));
+    const wrongs = (p.wrongs || []).map(w => ({ type: w.type, content: w.content, isCorrect: false }));
 
     // 全選択肢をシャッフル
     const choices = [...corrects, ...wrongs];
@@ -1560,7 +1619,7 @@ const Quiz = {
     choices.forEach((c, i) => {
       const btn = document.createElement('button');
       btn.className = 'quiz-choice';
-      btn.innerHTML = `<span class="choice-badge">${labels[i] || i+1}</span><span style="flex:1">${c.content}</span>`;
+      btn.innerHTML = `<span class="choice-badge">${labels[i] || i+1}</span><span style="flex:1">${renderChoiceContent(c)}</span>`;
       btn.onclick = () => this.toggleMcChoice(btn, i);
       choicesEl.appendChild(btn);
     });
@@ -1614,7 +1673,7 @@ const Quiz = {
       : '<div style="color:var(--accent);font-weight:700;margin-bottom:8px">不正解</div>'
         + '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">正解の選択肢：</div>'
         + '<div style="font-size:14px;line-height:1.8">'
-        + (p.corrects || []).map(c => `・${c.content}`).join('<br>')
+        + (p.corrects || []).map(c => c.type === 'image' ? `<div style="margin:2px 0">${renderChoiceContent(c)}</div>` : `・${c.content}`).join('')
         + '</div>';
 
     if (p.explanation) {
@@ -1631,8 +1690,8 @@ const Quiz = {
 
   renderOrder(p) {
     // 全選択肢 = 正解items + ダミー、シャッフル
-    const itemChoices = p.items.map((item, i) => ({ content: item.content, isItem: true, itemIdx: i }));
-    const dummyChoices = (p.dummies || []).map(d => ({ content: d.content, isItem: false, itemIdx: -1 }));
+    const itemChoices = p.items.map((item, i) => ({ type: item.type, content: item.content, isItem: true, itemIdx: i }));
+    const dummyChoices = (p.dummies || []).map(d => ({ type: d.type, content: d.content, isItem: false, itemIdx: -1 }));
     const all = [...itemChoices, ...dummyChoices];
     for (let i = all.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -1654,7 +1713,7 @@ const Quiz = {
       const choiceIdx = this.orderSlots[pos];
       if (choiceIdx !== null) {
         slot.classList.add('filled');
-        slot.innerHTML = `<span class="order-slot-num">${pos + 1}</span><span class="order-slot-content">${this.orderAllChoices[choiceIdx].content}</span>`;
+        slot.innerHTML = `<span class="order-slot-num">${pos + 1}</span><span class="order-slot-content">${renderChoiceContent(this.orderAllChoices[choiceIdx])}</span>`;
         const capturedPos = pos;
         slot.onclick = () => { if (!this.answered) this.deselectOrderItem(p, capturedPos); };
       } else {
@@ -1671,7 +1730,7 @@ const Quiz = {
       if (this.orderSlots.includes(choiceIdx)) return;
       const btn = document.createElement('button');
       btn.className = 'order-choice';
-      btn.textContent = choice.content;
+      btn.innerHTML = renderChoiceContent(choice);
       btn.onclick = () => { if (!this.answered) this.selectOrderItem(p, choiceIdx); };
       choicesEl.appendChild(btn);
     });
@@ -1733,7 +1792,7 @@ const Quiz = {
       : '<div style="color:var(--accent);font-weight:700;margin-bottom:8px">不正解</div>'
         + '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px">正解の順番：</div>'
         + '<div style="font-size:14px;line-height:1.8">'
-        + p.items.map((item, i) => `${i + 1}. ${item.content}`).join('<br>')
+        + p.items.map((item, i) => `<div style="margin:2px 0">${i + 1}. ${renderChoiceContent(item)}</div>`).join('')
         + '</div>';
 
     if (p.explanation) {

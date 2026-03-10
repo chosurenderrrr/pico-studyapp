@@ -1,65 +1,80 @@
 # SPEC - 技術仕様・要件定義
 
 ## 機能概要
-1. 問題データを `problem.json` 1ファイルに完全移行（.txt 形式を廃止）
-2. 問題保存後の全問再読み込みを廃止（保存処理の高速化）
+選択肢（正解・誤答・整序アイテム・ダミー）に画像を登録・表示できるようにする。
+選択問題・整序問題の両方が対象。
 
 ---
 
-## 1. problem.json 形式への完全移行
+## 1. エディタ：選択肢行の画像対応
 
-### 背景・目的
-現状、1問あたり最大43回のファイルアクセスが発生している。
-`problem.json` 1本に統合して 1回に削減する。.txt 形式は完全廃止。
+### 変更対象
+- `correct-choices`（選択問題：正解）
+- `wrong-choices`（選択問題：誤答）
+- `order-items`（整序問題：正解選択肢）
+- `order-dummies`（整序問題：ダミー）
 
-### JSONデータ構造
-各問題フォルダ（例: `001/`）に `problem.json` を格納する。
+### 各選択肢行の UI
+各行に「テキスト / 画像」タブを追加する（問題文・解説の切り替えと同じパターン）。
 
-```json
-{
-  "problemType": "multiple-choice",
-  "title": "タイトル",
-  "questionType": "text",
-  "question": "問題文 or base64 dataURL",
-  "corrects": [{"type": "text", "content": "正解1"}],
-  "wrongs":   [{"type": "text", "content": "不正解1"}],
-  "items":    [{"type": "text", "content": "並び替え項目1"}],
-  "dummies":  [{"type": "text", "content": "ダミー1"}],
-  "explanationType": "text",
-  "explanation": "解説文 or base64 dataURL"
+**テキストモード（デフォルト）：**
+- 現状の textarea をそのまま使用
+
+**画像モード：**
+- 「📷 画像を選択」ボタン
+- 選択後はプレビュー画像を表示
+- 画像の dataURL を行の `data-img` 属性に保持
+- プレビュー横に「✕ 画像を削除」ボタン（削除でテキストモードに戻る）
+
+### データ収集（Editor.save）
+現在の `querySelectorAll('textarea')` での収集を、行ごとに以下に変更：
+- `data-type="text"` の行 → `{ type: 'text', content: textarea.value.trim() }`
+- `data-type="image"` の行 → `{ type: 'image', content: row.dataset.img }`
+- 画像モードで画像未選択の行は収集しない（スキップ）
+
+### ロード時（Editor.load）
+既存の `addOrderItem(data)` / `addCorrectItem(data)` 等に渡す `data` の
+`type === 'image'` 判定を追加し、画像モードで行を初期化する。
+
+---
+
+## 2. クイズ：選択肢の画像表示
+
+### 共通ヘルパー関数（新規追加）
+```javascript
+function renderChoiceContent(choice) {
+  if (choice.type === 'image') {
+    return `<img src="${choice.content}" style="max-width:100%;max-height:120px;border-radius:6px;display:block;margin:4px auto">`;
+  }
+  return `<span>${choice.content}</span>`;
 }
 ```
 
-- 画像は `question` / `explanation` フィールドに **base64 data URL 文字列**として格納
+### 選択問題（renderMultipleChoice）
+現状：
+```javascript
+btn.innerHTML = `<span class="choice-badge">${labels[i]}</span><span style="flex:1">${c.content}</span>`;
+```
+変更後：
+```javascript
+btn.innerHTML = `<span class="choice-badge">${labels[i]}</span><span style="flex:1">${renderChoiceContent(c)}</span>`;
+```
+- `mcChoicesData` に `type` フィールドを含めるよう変更
 
-### 読み込み変更（ProblemIO.load）
-- `problem.json` を読み込み、JSON.parse して返す
-- .txt ファイルの読み込み処理はすべて削除
+### 整序問題（_renderOrderChoices / _renderOrderSlots）
+- `btn.textContent = choice.content` → `btn.innerHTML = renderChoiceContent(choice)`
+- スロットの `order-slot-content` 内も同様に `renderChoiceContent` を使用
 
-### 書き込み変更（ProblemIO.save）
-- `problem.json` として1回のJSON書き込みで保存
-- .txt ファイルへの書き込み・removeEntry はすべて削除
-
-### 効果試算
-| タイミング | 改善前 | 改善後 |
-|---|---|---|
-| ロード（500問） | ~21,500回のファイルアクセス | **500回** |
-| 問題保存 | 多数の write + ~40回の removeEntry | **1回の JSON write** |
+### 不正解時の正解表示（confirmMultipleChoice）
+現状：`・${c.content}`
+変更後：画像の場合はインライン `<img>` で表示
 
 ---
 
-## 2. 保存後の全問再読み込みを廃止
+## 3. CSS 調整
 
-### 現状の問題
-`Editor.save()` が保存後に `ProblemIO.loadAll()` を呼んでいる。
-→ 1問保存するたびに全問（500問）を再読み込みしている。
-
-### 改善内容
-`Editor.save()` 内で `ProblemIO.loadAll()` を呼ぶのをやめ、以下に変更：
-
-- **既存問題の更新**：`State.problems` 配列の該当問題オブジェクトを直接置き換える
-- **新規問題の追加**：`State.problems` に追加して `num` 順でソート
-- 最後に `App.renderProblemList()` を呼ぶ
+- 画像タイプの選択肢ボタン（`quiz-choice`, `order-choice`）が縦に広がっても崩れないよう `height: auto` を確認
+- `order-slot` が画像を内包できるよう `min-height` の調整（必要に応じて）
 
 ---
 
