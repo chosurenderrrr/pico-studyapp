@@ -4,7 +4,8 @@
       "Bash(cp \"g:/マイドライブ/github/pico-studyapp/.spec/PLAN.md\" \"g:/マイドライブ/github/pico-studyapp/.spec/PLAN-2026-03-11.md\")",
       "Bash(cp \"g:/マイドライブ/github/pico-studyapp/.spec/SPEC.md\" \"g:/マイドライブ/github/pico-studyapp/.spec/SPEC-2026-03-11.md\")",
       "Bash(cp \"g:/マイドライブ/github/pico-studyapp/.spec/TODO.md\" \"g:/マイドライブ/github/pico-studyapp/.spec/TODO-2026-03-11.md\")",
-      "Bash(cp \"g:/マイドライブ/github/pico-studyapp/.spec/KNOWLEDGE.md\" \"g:/マイドライブ/github/pico-studyapp/.spec/KNOWLEDGE-2026-03-11.md\")"
+      "Bash(cp \"g:/マイドライブ/github/pico-studyapp/.spec/KNOWLEDGE.md\" \"g:/マイドライブ/github/pico-studyapp/.spec/KNOWLEDGE-2026-03-11.md\")",
+      "Bash(node -e \":*)"
     ]
   }
 }
