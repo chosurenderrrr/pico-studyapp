@@ -418,6 +418,24 @@
     .quiz-choice.sel-wrong .choice-badge { background: var(--accent); color: white; }
     .quiz-choice.missed { border-color: #f39c12; background: #fef9e7; color: #f39c12; }
     .quiz-choice.missed .choice-badge { background: #f39c12; color: white; }
+
+    /* Loading Overlay */
+    #loading-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 9999; display: none;
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+      pointer-events: all;
+    }
+    .loading-spinner {
+      width: 48px; height: 48px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { color: white; font-size: 16px; font-weight: 600; }
+    #loading-progress { color: rgba(255,255,255,0.7); font-size: 14px; min-height: 1em; }
   </style>
 </head>
 <body>
@@ -703,6 +721,13 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ===== Loading Overlay ===== -->
+<div id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div id="loading-msg">読み込み中...</div>
+  <div id="loading-progress"></div>
+</div>
+
 <script>
 'use strict';
 
@@ -737,6 +762,21 @@ const IDB = {
         req.onerror = () => reject(req.error);
       });
     } catch { return null; }
+  },
+};
+
+// ===== Loading Overlay =====
+const Loading = {
+  show(msg = '読み込み中...') {
+    document.getElementById('loading-msg').textContent = msg;
+    document.getElementById('loading-progress').textContent = '';
+    document.getElementById('loading-overlay').style.display = 'flex';
+  },
+  setProgress(current, total) {
+    document.getElementById('loading-progress').textContent = `${current} / ${total}`;
+  },
+  hide() {
+    document.getElementById('loading-overlay').style.display = 'none';
   },
 };
 
@@ -892,12 +932,14 @@ const Data = {
 
 // ===== Problem I/O =====
 const ProblemIO = {
-  async loadAll(setHandle) {
+  async loadAll(setHandle, onProgress) {
     const dirs = await FS.listDirs(setHandle);
+    const numDirs = dirs.filter(d => /^\d+$/.test(d.name));
     const problems = [];
-    for (const d of dirs.filter(d => /^\d+$/.test(d.name))) {
-      const p = await this.load(d.handle, parseInt(d.name));
+    for (let i = 0; i < numDirs.length; i++) {
+      const p = await this.load(numDirs[i].handle, parseInt(numDirs[i].name));
       if (p) problems.push(p);
+      if (onProgress) onProgress(i + 1, numDirs.length);
     }
     return problems;
   },
@@ -1092,7 +1134,12 @@ const App = {
   async openSet(s) {
     State.currentSet = s;
     document.getElementById('set-detail-title').textContent = s.name;
-    State.problems = await ProblemIO.loadAll(s.handle);
+    Loading.show('読み込み中...');
+    try {
+      State.problems = await ProblemIO.loadAll(s.handle, (cur, total) => Loading.setProgress(cur, total));
+    } finally {
+      Loading.hide();
+    }
     this.renderProblemList();
     Nav.go('set-detail');
   },
@@ -1453,13 +1500,16 @@ const Editor = {
       problem.explanationType = 'image';
     }
 
+    Loading.show('保存中...');
     try {
       await ProblemIO.save(State.currentSet.handle, problem);
       State.problems = await ProblemIO.loadAll(State.currentSet.handle);
       App.renderProblemList();
+      Loading.hide();
       showToast('保存しました ✓');
       Nav.back();
     } catch (e) {
+      Loading.hide();
       console.error(e);
       showToast('保存に失敗しました');
     }
