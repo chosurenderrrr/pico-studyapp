@@ -948,55 +948,9 @@ const ProblemIO = {
   },
 
   async load(handle, num) {
-    const typeTxt = await FS.readText(handle, 'type.txt');
-    const isOrder = (typeTxt || '').trim() === 'order';
-    const p = { num, handle, problemType: isOrder ? 'order' : 'multiple-choice', title: '', questionType: 'text', question: '', corrects: [], wrongs: [], items: [], dummies: [], explanationType: 'text', explanation: '' };
-
-    // 並列読み込み
-    const keys = ['title', 'qText', 'exText'];
-    const reads = [
-      FS.readText(handle, 'title.txt'),
-      FS.readText(handle, 'question.txt'),
-      FS.readText(handle, 'explanation.txt'),
-    ];
-    if (isOrder) {
-      for (let i = 1; i <= 20; i++) { keys.push(`item${i}`); reads.push(FS.readText(handle, `item${i}.txt`)); }
-      for (let i = 1; i <= 20; i++) { keys.push(`dummy${i}`); reads.push(FS.readText(handle, `dummy${i}.txt`)); }
-    } else {
-      for (let i = 1; i <= 20; i++) { keys.push(`correct${i}`); reads.push(FS.readText(handle, `correct${i}.txt`)); }
-      for (let i = 1; i <= 20; i++) { keys.push(`wrong${i}`); reads.push(FS.readText(handle, `wrong${i}.txt`)); }
-    }
-    const vals = await Promise.all(reads);
-    const r = Object.fromEntries(keys.map((k, i) => [k, vals[i]]));
-
-    if (r.title !== null) p.title = r.title.trim();
-
-    if (r.qText !== null) { p.question = r.qText; p.questionType = 'text'; }
-    else {
-      const img = await FS.readImageAsDataURL(handle, 'question.png') || await FS.readImageAsDataURL(handle, 'question.jpg');
-      if (img) { p.question = img; p.questionType = 'image'; }
-    }
-
-    if (isOrder) {
-      for (let i = 1; i <= 20; i++) { if (r[`item${i}`] !== null) p.items.push({ type: 'text', content: r[`item${i}`] }); }
-      for (let i = 1; i <= 20; i++) { if (r[`dummy${i}`] !== null) p.dummies.push({ type: 'text', content: r[`dummy${i}`] }); }
-    } else {
-      for (let i = 1; i <= 20; i++) {
-        if (r[`correct${i}`] === null) break;
-        p.corrects.push({ type: 'text', content: r[`correct${i}`] });
-      }
-      for (let i = 1; i <= 20; i++) {
-        if (r[`wrong${i}`] === null) break;
-        p.wrongs.push({ type: 'text', content: r[`wrong${i}`] });
-      }
-    }
-
-    if (r.exText !== null) { p.explanation = r.exText; p.explanationType = 'text'; }
-    else {
-      const img = await FS.readImageAsDataURL(handle, 'explanation.png') || await FS.readImageAsDataURL(handle, 'explanation.jpg');
-      if (img) { p.explanation = img; p.explanationType = 'image'; }
-    }
-    return p;
+    const data = await FS.readJSON(handle, 'problem.json');
+    if (!data) return null;
+    return { num, handle, ...data };
   },
 
   async save(setHandle, problem) {
@@ -1004,72 +958,9 @@ const ProblemIO = {
     problem.num = num;
     const dir = await FS.getDir(setHandle, String(num).padStart(3, '0'), true);
     problem.handle = dir;
-
-    const writes = [];
-
-    if (problem.title && problem.title.trim()) {
-      writes.push(FS.writeText(dir, 'title.txt', problem.title.trim()));
-    }
-
-    if (problem.questionType === 'text') {
-      writes.push(FS.writeText(dir, 'question.txt', problem.question));
-    } else {
-      writes.push(this._saveDataURL(dir, 'question.png', problem.question));
-    }
-
-    if (problem.problemType === 'order') {
-      writes.push(FS.writeText(dir, 'type.txt', 'order'));
-      for (let i = 0; i < problem.items.length; i++) {
-        writes.push(FS.writeText(dir, `item${i+1}.txt`, problem.items[i].content));
-      }
-      for (let i = problem.items.length + 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`item${i}.txt`).catch(() => {}));
-      }
-      const dummies = problem.dummies || [];
-      for (let i = 0; i < dummies.length; i++) {
-        writes.push(FS.writeText(dir, `dummy${i+1}.txt`, dummies[i].content));
-      }
-      for (let i = dummies.length + 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`dummy${i}.txt`).catch(() => {}));
-      }
-      for (let i = 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`correct${i}.txt`).catch(() => {}));
-        writes.push(dir.removeEntry(`wrong${i}.txt`).catch(() => {}));
-      }
-      writes.push(dir.removeEntry('display_count.txt').catch(() => {}));
-    } else {
-      for (let i = 0; i < problem.corrects.length; i++) {
-        writes.push(FS.writeText(dir, `correct${i+1}.txt`, problem.corrects[i].content));
-      }
-      for (let i = problem.corrects.length + 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`correct${i}.txt`).catch(() => {}));
-      }
-      for (let i = 0; i < problem.wrongs.length; i++) {
-        writes.push(FS.writeText(dir, `wrong${i+1}.txt`, problem.wrongs[i].content));
-      }
-      for (let i = problem.wrongs.length + 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`wrong${i}.txt`).catch(() => {}));
-      }
-      writes.push(dir.removeEntry('type.txt').catch(() => {}));
-      for (let i = 1; i <= 20; i++) {
-        writes.push(dir.removeEntry(`item${i}.txt`).catch(() => {}));
-        writes.push(dir.removeEntry(`dummy${i}.txt`).catch(() => {}));
-      }
-    }
-
-    if (problem.explanation) {
-      if (problem.explanationType === 'text') writes.push(FS.writeText(dir, 'explanation.txt', problem.explanation));
-      else writes.push(this._saveDataURL(dir, 'explanation.png', problem.explanation));
-    }
-
-    await Promise.all(writes);
-
+    const { num: _n, handle: _h, ...data } = problem;
+    await FS.writeJSON(dir, 'problem.json', data);
     return problem;
-  },
-
-  async _saveDataURL(dir, name, dataURL) {
-    const res = await fetch(dataURL);
-    await FS.writeBinary(dir, name, await res.arrayBuffer());
   },
 
   async nextNum(setHandle) {
@@ -1543,7 +1434,9 @@ const Editor = {
     Loading.show('保存中...');
     try {
       await ProblemIO.save(State.currentSet.handle, problem);
-      State.problems = await ProblemIO.loadAll(State.currentSet.handle);
+      const idx = State.problems.findIndex(p => p.num === problem.num);
+      if (idx >= 0) { State.problems[idx] = problem; }
+      else { State.problems.push(problem); State.problems.sort((a, b) => a.num - b.num); }
       App.renderProblemList();
       Loading.hide();
       showToast('保存しました ✓');

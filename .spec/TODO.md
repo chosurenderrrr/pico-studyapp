@@ -2,31 +2,29 @@
 
 ## タスク一覧
 
-### Feature 1: 処理の高速化
-- [x] `ProblemIO.loadAll`：全問題を `Promise.all` で並列読み込みに変更
-- [x] `ProblemIO.load`：内部の独立したファイル読み込みを並列化
-- [x] `ProblemIO.save`：独立した書き込みを `Promise.all` で並列化
+### Feature 1: problem.json への完全移行
 
-### Feature 2: 「出題時の表示数」廃止
-- [x] エディタから `#mc-display-count-section` の HTML を削除
-- [x] `ProblemIO.save` から `display_count.txt` 書き込みを削除
-- [x] `ProblemIO.load` から `display_count.txt` 読み込みを削除
-- [x] クイズ処理（`Quiz`）で `displayCount` を使わず全選択肢を使用するよう変更
+#### ProblemIO.load の書き換え
+- [x] `type.txt` の読み込みを削除
+- [x] .txt ファイル群（title/question/explanation/correct/wrong/item/dummy）の読み込みをすべて削除
+- [x] `problem.json` を読み込んで JSON.parse し返す処理に置き換え
 
-### Feature 3: 整序問題にダミー選択肢を追加
-- [x] `ProblemIO.load`：`dummy1.txt`〜`dummyN.txt` を読み込み `p.dummies[]` に格納
-- [x] `ProblemIO.save`：`dummies[]` を `dummy1.txt`〜`dummyN.txt` として書き込み
-- [x] エディタ：「ダミーの選択肢」セクション HTML を追加
-- [x] エディタ：`Editor.load` でダミー選択肢を読み込み表示
-- [x] エディタ：`Editor.save` でダミー選択肢を収集
-- [x] クイズ：整序問題の選択肢を `items + dummies` のシャッフルに変更
-- [x] クイズ：スロット数を `items.length` のみに変更（ダミーはスロット対象外）
+#### ProblemIO.save の書き換え
+- [x] .txt ファイルへの writeText 処理をすべて削除
+- [x] removeEntry の呼び出しをすべて削除
+- [x] `problem.json` を JSON.stringify して1回で書き込む処理に置き換え
 
-### Feature 4: 保存ボタンをコンテンツ末尾に追加
-- [x] エディタ末尾（削除ボタンの上）に保存ボタンを追加
+### Feature 2: 保存後の全問再読み込みを廃止
+
+- [x] `Editor.save()` 内の `ProblemIO.loadAll()` 呼び出しを削除
+- [x] 既存問題の場合：`State.problems` 内の該当オブジェクトを保存後の problem で置き換え
+- [x] 新規問題の場合：`State.problems` に追加して `num` 順でソート
+- [x] `App.renderProblemList()` を呼んで再描画（既存コードをそのまま使用）
 
 ### 動作確認
-- [ ] 高速化：問題数が多いセットで読み込み時間が短縮されることを確認
-- [ ] 表示数廃止：既存データのあるセットで全選択肢が表示されることを確認
-- [ ] ダミー選択肢：整序問題でダミーが混在して出題されることを確認
-- [ ] 保存ボタン：末尾の保存ボタンで正常に保存されることを確認
+- [ ] 新規問題を作成・保存 → problem.json が生成されること
+- [ ] 既存問題を編集・保存 → problem.json が更新されること
+- [ ] 保存後に問題一覧が正しく更新されること（全問再読み込みなし）
+- [ ] 読み込み：問題数が多いセットで速度が改善されること
+- [ ] 画像あり問題（question/explanation が画像）で正常に保存・読み込みできること
+- [ ] 整序問題（order タイプ）で正常に保存・読み込みできること
