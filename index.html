@@ -459,6 +459,30 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #loading-msg { color: white; font-size: 16px; font-weight: 600; }
     #loading-progress { color: rgba(255,255,255,0.7); font-size: 14px; min-height: 1em; }
+
+    /* Question Pages */
+    .q-page-item {
+      background: var(--surface); border: 2px solid var(--border);
+      border-radius: 8px; padding: 12px; margin-top: 10px;
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+    }
+    .q-page-item.active { border-color: var(--primary); background: #e8f0fd; }
+    .q-page-num { font-weight: 700; color: var(--text-secondary); }
+    .q-page-item.active .q-page-num { color: var(--primary); }
+    .q-page-preview { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .q-page-delete { color: var(--accent); font-size: 18px; padding: 4px; }
+
+    /* Quiz Page Navigation */
+    .quiz-page-nav {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      margin-bottom: 10px;
+    }
+    .quiz-page-nav button {
+      background: var(--primary); color: white; border: none;
+      border-radius: 20px; padding: 8px 16px; font-size: 14px; cursor: pointer;
+    }
+    .quiz-page-nav button:disabled { background: var(--border); color: var(--text-secondary); cursor: default; }
+    .quiz-page-nav span { font-size: 14px; color: var(--text-secondary); }
   </style>
 </head>
 <body>
@@ -549,7 +573,7 @@
 
     <!-- 問題 -->
     <div class="editor-section">
-      <div class="editor-label">問題</div>
+      <div class="editor-label">問題 <span id="q-page-label" style="font-weight:normal;color:var(--text-secondary)">(1ページ)</span></div>
       <div class="content-type-tabs" id="q-type-tabs">
         <button class="tab-btn active" onclick="Editor.setQuestionType('text',this)">テキスト</button>
         <button class="tab-btn" onclick="Editor.setQuestionType('image',this)">画像</button>
@@ -564,6 +588,11 @@
           <button class="btn secondary small" id="q-edit-btn" style="display:none" onclick="Editor.openEditor('question')">✏️ 編集</button>
         </div>
       </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn secondary small" id="add-q-page-btn" onclick="Editor.addQuestionPage()">＋ ページを追加</button>
+        <button class="btn secondary small" id="remove-q-page-btn" style="display:none;color:var(--accent)" onclick="Editor.removeQuestionPage()">－ ページを削除</button>
+      </div>
+      <div id="q-pages-container"></div>
     </div>
 
     <!-- 整序選択肢 -->
@@ -634,6 +663,11 @@
     <div class="quiz-progress">
       <span id="quiz-progress-text"></span>
       <div class="quiz-progress-bar"><div class="quiz-progress-fill" id="quiz-progress-fill"></div></div>
+    </div>
+    <div class="quiz-page-nav" id="quiz-page-nav" style="display:none">
+      <button id="quiz-page-prev" onclick="Quiz.prevPage()">◀ 前へ</button>
+      <span id="quiz-page-label">1 / 1</span>
+      <button id="quiz-page-next" onclick="Quiz.nextPage()">次へ ▶</button>
     </div>
     <div class="quiz-question" id="quiz-question-content"></div>
     <div class="quiz-choices" id="quiz-choices"></div>
@@ -735,6 +769,7 @@
     <button class="img-editor-tool" id="ie-tool-eraser" onclick="ImgEditor.setTool('eraser',this)">🧹 消しゴム</button>
     <button class="img-editor-tool" id="ie-tool-trim" onclick="ImgEditor.setTool('trim',this)">✂️ トリミング</button>
     <button class="img-editor-tool" onclick="ImgEditor.addOverlayImage()">🖼 追加</button>
+    <button class="img-editor-tool" id="ie-tool-fit" onclick="ImgEditor.fitToQuestion()">📐 フィット</button>
   </div>
   <div id="ie-canvas-wrap">
     <canvas id="img-editor-canvas"></canvas>
@@ -1094,7 +1129,19 @@ const App = {
       const total = stat.correct + stat.wrong;
       const rate = total > 0 ? Math.round(stat.correct / total * 100) + '%' : '未挑戦';
       const typeIcon = p.problemType === 'order' ? '🔢 ' : '';
-      const displayText = p.title ? p.title : (p.questionType === 'text' ? (p.question.substring(0, 28) || '（空）') : '🖼 画像問題');
+      // 複数ページ対応
+      let displayText;
+      if (p.title) {
+        displayText = p.title;
+      } else if (p.questions && p.questions.length > 0) {
+        const pageCount = p.questions.length;
+        const firstPage = p.questions[0];
+        displayText = pageCount > 1
+          ? `🖼 ${pageCount}ページ問題`
+          : (firstPage.type === 'image' ? '🖼 画像問題' : (firstPage.content ? firstPage.content.substring(0, 28) : '（空）'));
+      } else {
+        displayText = p.questionType === 'text' ? (p.question ? p.question.substring(0, 28) : '（空）') : '🖼 画像問題';
+      }
       const preview = typeIcon + displayText;
       const btn = document.createElement('button');
       btn.className = 'problem-item';
@@ -1176,9 +1223,13 @@ const Editor = {
   exType: 'text',
   questionImg: null,
   exImg: null,
+  questionPages: [], // 複数ページ対応: [{type: 'text'|'image', content: string}, ...]
+  currentPageIndex: 0,
 
   load(problem) {
     this.questionImg = null; this.exImg = null;
+    this.questionPages = [];
+    this.currentPageIndex = 0;
     document.getElementById('editor-title').textContent = problem ? '問題を編集' : '問題を作成';
     document.getElementById('editor-delete-area').style.display = problem ? 'block' : 'none';
 
@@ -1216,14 +1267,33 @@ const Editor = {
     // タイトル
     document.getElementById('problem-title').value = problem.title || '';
 
-    if (problem.questionType === 'image') {
-      this.setQuestionType('image', document.querySelector('#q-type-tabs .tab-btn:nth-child(2)'));
-      this.questionImg = problem.question;
-      const img = document.getElementById('q-img-preview');
-      img.src = problem.question; img.style.display = 'block';
-      document.getElementById('q-edit-btn').style.display = '';
+    // 複数ページ問題の読み込み
+    if (problem.questions && Array.isArray(problem.questions)) {
+      // 新形式: 複数ページ
+      this.questionPages = problem.questions.map(q => ({
+        type: q.type || 'text',
+        content: q.content || ''
+      }));
+      this.currentPageIndex = 0;
+      this._renderQuestionPages();
+      this._loadPageToEditor(0);
     } else {
-      document.getElementById('q-text').value = problem.question;
+      // 旧形式: 単一問題（後方互換性）
+      this.questionPages = [{
+        type: problem.questionType || 'text',
+        content: problem.question || ''
+      }];
+      this.currentPageIndex = 0;
+      this._renderQuestionPages();
+      if (problem.questionType === 'image') {
+        this.setQuestionType('image', document.querySelector('#q-type-tabs .tab-btn:nth-child(2)'));
+        this.questionImg = problem.question;
+        const img = document.getElementById('q-img-preview');
+        img.src = problem.question; img.style.display = 'block';
+        document.getElementById('q-edit-btn').style.display = '';
+      } else {
+        document.getElementById('q-text').value = problem.question;
+      }
     }
 
     if (isOrder) {
@@ -1373,6 +1443,85 @@ const Editor = {
     document.getElementById('q-image-area').style.display = type === 'image' ? '' : 'none';
   },
 
+  // ページ管理メソッド
+  _renderQuestionPages() {
+    const container = document.getElementById('q-pages-container');
+    const label = document.getElementById('q-page-label');
+    const addBtn = document.getElementById('add-q-page-btn');
+    const removeBtn = document.getElementById('remove-q-page-btn');
+    
+    label.textContent = `(${this.currentPageIndex + 1}ページ)`;
+    addBtn.style.display = this.questionPages.length >= 10 ? 'none' : 'inline-block';
+    removeBtn.style.display = this.questionPages.length > 1 ? 'inline-block' : 'none';
+    
+    container.innerHTML = '';
+    this.questionPages.forEach((page, idx) => {
+      const div = document.createElement('div');
+      div.className = 'q-page-item' + (idx === this.currentPageIndex ? ' active' : '');
+      const preview = page.type === 'image' ? '🖼 画像' : (page.content ? page.content.substring(0, 20) + '...' : '（空）');
+      div.innerHTML = `<span class="q-page-num">${idx + 1}</span><span class="q-page-preview">${preview}</span>`;
+      div.onclick = () => this.switchToPage(idx);
+      container.appendChild(div);
+    });
+  },
+
+  _loadPageToEditor(idx) {
+    const page = this.questionPages[idx];
+    if (!page) return;
+    
+    if (page.type === 'image') {
+      this.setQuestionType('image', document.querySelector('#q-type-tabs .tab-btn:nth-child(2)'));
+      this.questionImg = page.content;
+      const img = document.getElementById('q-img-preview');
+      img.src = page.content; img.style.display = 'block';
+      document.getElementById('q-edit-btn').style.display = '';
+    } else {
+      this.setQuestionType('text', document.querySelector('#q-type-tabs .tab-btn:nth-child(1)'));
+      document.getElementById('q-text').value = page.content;
+    }
+  },
+
+  _saveCurrentPage() {
+    const page = this.questionPages[this.currentPageIndex];
+    if (!page) return;
+    
+    if (this.questionType === 'image') {
+      page.type = 'image';
+      page.content = this.questionImg || '';
+    } else {
+      page.type = 'text';
+      page.content = document.getElementById('q-text').value;
+    }
+  },
+
+  addQuestionPage() {
+    this._saveCurrentPage();
+    this.questionPages.push({ type: 'text', content: '' });
+    this.currentPageIndex = this.questionPages.length - 1;
+    this._renderQuestionPages();
+    this._loadPageToEditor(this.currentPageIndex);
+    document.getElementById('q-text').focus();
+  },
+
+  removeQuestionPage() {
+    if (this.questionPages.length <= 1) return;
+    if (!confirm('このページを削除しますか？')) return;
+    
+    this.questionPages.splice(this.currentPageIndex, 1);
+    if (this.currentPageIndex >= this.questionPages.length) {
+      this.currentPageIndex = this.questionPages.length - 1;
+    }
+    this._renderQuestionPages();
+    this._loadPageToEditor(this.currentPageIndex);
+  },
+
+  switchToPage(idx) {
+    this._saveCurrentPage();
+    this.currentPageIndex = idx;
+    this._renderQuestionPages();
+    this._loadPageToEditor(idx);
+  },
+
   setExType(type, btn) {
     this.exType = type;
     if (btn) { btn.closest('.content-type-tabs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
@@ -1446,15 +1595,15 @@ const Editor = {
     // タイトル
     problem.title = document.getElementById('problem-title').value.trim();
 
-    // Question
-    if (this.questionType === 'text') {
-      problem.question = document.getElementById('q-text').value.trim();
-      problem.questionType = 'text';
-    } else {
-      if (!this.questionImg) { showToast('問題の画像を選択してください'); return; }
-      problem.question = this.questionImg; problem.questionType = 'image';
-    }
-    if (!problem.question) { showToast('問題を入力してください'); return; }
+    // Question - 複数ページ対応
+    this._saveCurrentPage(); // 現在のページを保存
+    // 空のページを除外
+    const validPages = this.questionPages.filter(p => p.content && p.content.trim());
+    if (validPages.length === 0) { showToast('問題を入力してください'); return; }
+    problem.questions = validPages;
+    // 後方互換性のため最初のページは question に設定
+    problem.question = validPages[0].content;
+    problem.questionType = validPages[0].type;
 
     if (this.problemType === 'order') {
       // 整序問題: items + dummies を収集
@@ -1580,6 +1729,7 @@ const Quiz = {
   orderAllChoices: [],
   mcSelectedSet: new Set(),   // 選択中の選択肢インデックス
   mcChoicesData: [],          // 表示中の選択肢データ [{content, isCorrect}]
+  currentPageIndex: 0,        // 現在の問題ページ
 
   start(problems, mode) {
     this.problems = problems;
@@ -1604,12 +1754,21 @@ const Quiz = {
     document.getElementById('quiz-answer-area').classList.remove('show');
     document.getElementById('quiz-action-bar').classList.remove('show');
     this.answered = false;
+    this.currentPageIndex = 0;
 
-    // Question
+    // Question - 複数ページ対応
     const qEl = document.getElementById('quiz-question-content');
-    qEl.innerHTML = p.questionType === 'image'
-      ? `<img src="${p.question}" alt="問題">`
-      : `<span>${p.question}</span>`;
+    const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
+    this._renderQuestionPage(questions, 0);
+
+    // ページナビゲーション
+    const pageNav = document.getElementById('quiz-page-nav');
+    if (questions.length > 1) {
+      pageNav.style.display = 'flex';
+      this._updatePageNav(questions.length);
+    } else {
+      pageNav.style.display = 'none';
+    }
 
     // Last button label
     document.getElementById('quiz-next-btn').textContent =
@@ -1627,6 +1786,42 @@ const Quiz = {
       document.getElementById('mc-confirm-btn').disabled = true;
       this.mcSelectedSet = new Set();
       this.renderMultipleChoice(p);
+    }
+  },
+
+  // ページナビゲーション
+  _renderQuestionPage(questions, pageIdx) {
+    const qEl = document.getElementById('quiz-question-content');
+    const page = questions[pageIdx];
+    if (!page) return;
+    qEl.innerHTML = page.type === 'image'
+      ? `<img src="${page.content}" alt="問題">`
+      : `<span>${page.content}</span>`;
+  },
+
+  _updatePageNav(totalPages) {
+    document.getElementById('quiz-page-label').textContent = `${this.currentPageIndex + 1} / ${totalPages}`;
+    document.getElementById('quiz-page-prev').disabled = this.currentPageIndex === 0;
+    document.getElementById('quiz-page-next').disabled = this.currentPageIndex >= totalPages - 1;
+  },
+
+  prevPage() {
+    const p = this.problems[this.current];
+    const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
+    if (this.currentPageIndex > 0) {
+      this.currentPageIndex--;
+      this._renderQuestionPage(questions, this.currentPageIndex);
+      this._updatePageNav(questions.length);
+    }
+  },
+
+  nextPage() {
+    const p = this.problems[this.current];
+    const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
+    if (this.currentPageIndex < questions.length - 1) {
+      this.currentPageIndex++;
+      this._renderQuestionPage(questions, this.currentPageIndex);
+      this._updatePageNav(questions.length);
     }
   },
 
@@ -2295,6 +2490,24 @@ const ImgEditor = {
     document.getElementById('ie-trim-rect').style.width = '0';
     document.getElementById('ie-trim-rect').style.height = '0';
     showToast('トリミングしました');
+  },
+
+  // 問題枠にアスペクト比維持でフィットさせる
+  fitToQuestion() {
+    const wrap = document.getElementById('ie-canvas-wrap');
+    const maxW = wrap.clientWidth - 20; // 余白
+    const maxH = wrap.clientHeight - 20;
+    const currentW = this.canvas.width;
+    const currentH = this.canvas.height;
+    
+    // アスペクト比を維持しながら最大化
+    const scaleW = maxW / currentW;
+    const scaleH = maxH / currentH;
+    this.scale = Math.min(scaleW, scaleH, 1); // 1倍以上にはしない
+    
+    this.canvas.style.width = Math.round(currentW * this.scale) + 'px';
+    this.canvas.style.height = Math.round(currentH * this.scale) + 'px';
+    showToast('問題枠にフィットさせました');
   },
 
   async addOverlayImage() {
