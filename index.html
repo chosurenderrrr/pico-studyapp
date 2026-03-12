@@ -868,17 +868,18 @@ function showToast(msg, duration = 2500) {
 }
 
 // 画像リサイズ関数: 最大サイズ以内に収める（縦横比維持）
-async function resizeImage(dataUrl, maxWidth = 600, maxHeight = 400) {
+// maxHeightに0またはInfinityを指定すると幅のみ制限（縦長画像を許容）
+async function resizeImage(dataUrl, maxWidth = 600, maxHeight = 0) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       let w = img.width;
       let h = img.height;
       
-      // アスペクト比を維持しながらリサイズ
-      if (w > maxWidth || h > maxHeight) {
-        const ratio = Math.min(maxWidth / w, maxHeight / h);
-        w = Math.round(w * ratio);
+      // 幅の制限のみ適用（高さは無制限）
+      if (w > maxWidth) {
+        const ratio = maxWidth / w;
+        w = maxWidth;
         h = Math.round(h * ratio);
       }
       
@@ -1301,7 +1302,16 @@ const Editor = {
     document.getElementById('wrong-choices').innerHTML = '';
     document.getElementById('problem-title').value = '';
 
-    if (!problem) { this.addCorrectItem(); this.addWrongChoice(); return; }
+    if (!problem) {
+      // 新規作成時に1ページ目をデフォルトで表示
+      this.questionPages.push({ type: 'text', content: '' });
+      this.currentPageIndex = 0;
+      this._renderQuestionPages();
+      this._loadPageToEditor(0);
+      this.addCorrectItem();
+      this.addWrongChoice();
+      return;
+    }
 
     // タイトル
     document.getElementById('problem-title').value = problem.title || '';
@@ -1417,8 +1427,8 @@ const Editor = {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      // リサイズ処理を追加
-      const data = await resizeImage(dataUrl, 600, 400);
+      // リサイズ処理を追加（幅600px・高さ無制限）
+      const data = await resizeImage(dataUrl, 600);
       const row = btn.closest('.choice-row');
       row.dataset.img = data;
       const img = row.querySelector('.choice-image-area img');
@@ -1615,8 +1625,8 @@ const Editor = {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      // リサイズ処理を追加
-      const data = await resizeImage(dataUrl, 600, 400);
+      // リサイズ処理を追加（幅600px・高さ無制限）
+      const data = await resizeImage(dataUrl, 600);
       if (target === 'question') {
         this.questionImg = data;
         const img = document.getElementById('q-img-preview');
