@@ -273,10 +273,14 @@
       font-size: 16px; font-weight: 600; cursor: pointer;
     }
     .quiz-confirm-btn:disabled { background: var(--border); color: var(--text-secondary); cursor: not-allowed; }
-    .quiz-next-btn {
+    .quiz-next-btn, #quiz-explain-btn {
       background: var(--primary); color: white; border: none;
       border-radius: var(--radius); padding: 14px; width: 100%;
       font-size: 16px; font-weight: 600; cursor: pointer;
+      box-sizing: border-box; line-height: 1.4;
+    }
+    #quiz-explain-btn {
+      background: var(--surface); color: var(--primary); border: 2px solid var(--primary);
     }
 
     /* Result */
@@ -1808,6 +1812,8 @@ const Quiz = {
     document.getElementById('quiz-progress-fill').style.width = `${(this.current / total) * 100}%`;
     document.getElementById('quiz-answer-area').classList.remove('show');
     document.getElementById('quiz-action-bar').classList.remove('show');
+    document.getElementById('quiz-action-bar-result').textContent = '';
+    document.getElementById('quiz-explain-btn').style.display = 'none';
     this.answered = false;
     this.currentPageIndex = 0;
 
@@ -1928,7 +1934,7 @@ const Quiz = {
     const p = this.problems[this.current];
     if (this.answered) return;
     this.answered = true;
-    document.getElementById('mc-confirm-btn').disabled = true;
+    document.getElementById('mc-confirm-btn').style.display = 'none';
 
     // 全正解インデックスのセットと比較
     const correctIdxs = new Set(this.mcChoicesData.map((c, i) => c.isCorrect ? i : -1).filter(i => i >= 0));
@@ -1980,9 +1986,11 @@ const Quiz = {
     const bar = document.getElementById('quiz-action-bar');
     const barResult = document.getElementById('quiz-action-bar-result');
     const explainBtn = document.getElementById('quiz-explain-btn');
+    const nextBtn = document.getElementById('quiz-next-btn');
     barResult.textContent = isCorrect ? '✓ 正解！' : '✗ 不正解';
     barResult.className = isCorrect ? 'correct' : 'wrong';
     explainBtn.style.display = p.explanation ? '' : 'none';
+    nextBtn.textContent = '次へ →';
     bar.classList.add('show');
   },
 
@@ -2056,7 +2064,7 @@ const Quiz = {
     const p = this.problems[this.current];
     if (this.answered) return;
     this.answered = true;
-    document.getElementById('order-confirm-btn').disabled = true;
+    document.getElementById('order-confirm-btn').style.display = 'none';
 
     const isCorrect = this.orderSlots.every((choiceIdx, pos) => {
       const c = this.orderAllChoices[choiceIdx];
@@ -2108,9 +2116,11 @@ const Quiz = {
     const bar = document.getElementById('quiz-action-bar');
     const barResult = document.getElementById('quiz-action-bar-result');
     const explainBtn = document.getElementById('quiz-explain-btn');
+    const nextBtn = document.getElementById('quiz-next-btn');
     barResult.textContent = isCorrect ? '✓ 正解！' : '✗ 不正解';
     barResult.className = isCorrect ? 'correct' : 'wrong';
-    explainBtn.style.display = (p.explanation || !isCorrect) ? '' : 'none';
+    explainBtn.style.display = p.explanation ? '' : 'none';
+    nextBtn.textContent = '次へ →';
     bar.classList.add('show');
   },
 
@@ -2121,6 +2131,16 @@ const Quiz = {
   },
 
   next() {
+    // 回答せずに次へ進もうとした場合、回答確定処理を実行
+    if (!this.answered) {
+      const p = this.problems[this.current];
+      if (p.problemType === 'order') {
+        this.confirmOrder();
+      } else {
+        this.confirmMultipleChoice();
+      }
+      return;
+    }
     this.current++;
     if (this.current >= this.problems.length) this.finish();
     else this.render();
