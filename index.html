@@ -424,20 +424,6 @@
     }
     .order-choice:active { opacity: 0.7; background: #e8f0fd; }
     .order-choice:disabled { opacity: 0.5; cursor: not-allowed; }
-    .order-confirm-btn {
-      background: var(--primary); color: white; border: none;
-      border-radius: var(--radius); padding: 14px; width: 100%;
-      font-size: 16px; font-weight: 600; cursor: pointer;
-    }
-    .order-confirm-btn:disabled { background: var(--border); color: var(--text-secondary); cursor: not-allowed; }
-
-    /* Multiple choice (new) */
-    .mc-confirm-btn {
-      background: var(--primary); color: white; border: none;
-      border-radius: var(--radius); padding: 14px; width: 100%;
-      font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 4px;
-    }
-    .mc-confirm-btn:disabled { background: var(--border); color: var(--text-secondary); cursor: not-allowed; }
     .quiz-choice.selected { border-color: var(--primary); background: #e8f0fd; }
     .quiz-choice.selected .choice-badge { background: var(--primary); color: white; }
     .quiz-choice.sel-correct { border-color: var(--correct); background: #e8f8ef; color: var(--correct); }
@@ -676,12 +662,10 @@
     </div>
     <div class="quiz-question" id="quiz-question-content"></div>
     <div class="quiz-choices" id="quiz-choices"></div>
-    <button class="mc-confirm-btn" id="mc-confirm-btn" disabled onclick="Quiz.confirmMultipleChoice()">回答確定</button>
     <div id="order-ui" style="display:none">
       <div class="order-answer-slots" id="order-answer-slots"></div>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;text-align:center">↑ タップで取り消し</div>
       <div class="order-choices-area" id="order-choices-area"></div>
-      <button class="order-confirm-btn" id="order-confirm-btn" disabled onclick="Quiz.confirmOrder()">回答確定</button>
     </div>
     <div class="quiz-answer-area" id="quiz-answer-area">
       <div class="quiz-answer-label" id="quiz-answer-label">解説</div>
@@ -1821,10 +1805,6 @@ const Quiz = {
     document.getElementById('quiz-choices').innerHTML = '';
     document.getElementById('order-ui').style.display = 'none';
 
-    // 回答確定ボタンを表示状態にリセット
-    document.getElementById('mc-confirm-btn').style.display = '';
-    document.getElementById('order-confirm-btn').style.display = '';
-
     // Question - 複数ページ対応
     const qEl = document.getElementById('quiz-question-content');
     const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
@@ -1844,14 +1824,11 @@ const Quiz = {
 
     if (p.problemType === 'order') {
       document.getElementById('quiz-choices').style.display = 'none';
-      document.getElementById('mc-confirm-btn').style.display = 'none';
       document.getElementById('order-ui').style.display = '';
       this.renderOrder(p);
     } else {
       document.getElementById('order-ui').style.display = 'none';
       document.getElementById('quiz-choices').style.display = '';
-      document.getElementById('mc-confirm-btn').style.display = '';
-      document.getElementById('mc-confirm-btn').disabled = true;
       this.mcSelectedSet = new Set();
       this.renderMultipleChoice(p);
     }
@@ -1927,14 +1904,12 @@ const Quiz = {
       this.mcSelectedSet.add(idx);
       btn.classList.add('selected');
     }
-    document.getElementById('mc-confirm-btn').disabled = this.mcSelectedSet.size === 0;
   },
 
   async confirmMultipleChoice() {
     const p = this.problems[this.current];
     if (this.answered) return;
     this.answered = true;
-    document.getElementById('mc-confirm-btn').style.display = 'none';
 
     // 全正解インデックスのセットと比較
     const correctIdxs = new Set(this.mcChoicesData.map((c, i) => c.isCorrect ? i : -1).filter(i => i >= 0));
@@ -2007,7 +1982,6 @@ const Quiz = {
     this.orderSlots = new Array(p.items.length).fill(null);
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
-    document.getElementById('order-confirm-btn').disabled = true;
   },
 
   _renderOrderSlots(p) {
@@ -2048,14 +2022,10 @@ const Quiz = {
     this.orderSlots[emptySlot] = choiceIdx;
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
-    if (!this.orderSlots.includes(null)) {
-      document.getElementById('order-confirm-btn').disabled = false;
-    }
   },
 
   deselectOrderItem(p, pos) {
     this.orderSlots[pos] = null;
-    document.getElementById('order-confirm-btn').disabled = true;
     this._renderOrderSlots(p);
     this._renderOrderChoices(p);
   },
@@ -2064,7 +2034,6 @@ const Quiz = {
     const p = this.problems[this.current];
     if (this.answered) return;
     this.answered = true;
-    document.getElementById('order-confirm-btn').style.display = 'none';
 
     const isCorrect = this.orderSlots.every((choiceIdx, pos) => {
       const c = this.orderAllChoices[choiceIdx];
