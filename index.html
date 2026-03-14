@@ -1815,6 +1815,10 @@ const Quiz = {
     document.getElementById('quiz-choices').innerHTML = '';
     document.getElementById('order-ui').style.display = 'none';
 
+    // 回答確定ボタンを表示状態にリセット
+    document.getElementById('mc-confirm-btn').style.display = '';
+    document.getElementById('order-confirm-btn').style.display = '';
+
     // Question - 複数ページ対応
     const qEl = document.getElementById('quiz-question-content');
     const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
