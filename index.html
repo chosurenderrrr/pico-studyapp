@@ -290,35 +290,36 @@
     .result-label { font-size: 16px; color: var(--text-secondary); margin-bottom: 32px; margin-top: 4px; }
 
     /* Calendar */
-    .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .calendar-nav { background: none; border: none; font-size: 28px; cursor: pointer; padding: 4px 10px; color: var(--primary); }
-    .calendar-month { font-size: 18px; font-weight: 700; }
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-    .cal-day-header { text-align: center; font-size: 11px; color: var(--text-secondary); padding: 4px 0; font-weight: 600; }
+    .calendar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .calendar-nav { background: none; border: none; font-size: 18px; cursor: pointer; padding: 2px 6px; color: var(--primary); }
+    .calendar-month { font-size: 13px; font-weight: 700; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+    .cal-day-header { text-align: center; font-size: 9px; color: var(--text-secondary); padding: 1px 0; font-weight: 600; }
     .cal-day {
-      aspect-ratio: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-start;
-      padding: 4px 2px; border-radius: 8px; cursor: pointer;
-      font-size: 12px; position: relative;
+      aspect-ratio: auto; height: 50px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 1px 0; border-radius: 3px; cursor: pointer;
+      font-size: 13px; position: relative;
     }
     .cal-day:active { background: var(--border); }
     .cal-day.today { background: var(--primary); color: white; font-weight: 700; }
     .cal-day.other-month { color: var(--border); cursor: default; }
     .cal-day.selected { outline: 2px solid var(--primary); }
     .cal-day.today.selected { outline: 2px solid var(--primary-dark); }
-    .cal-memo-title { font-size: 8px; line-height: 1.2; margin-top: 1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); }
+    .cal-memo-title { font-size: 7px; line-height: 1.1; margin-top: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--primary); }
     .cal-day.today .cal-memo-title { color: #a8e8ff; }
-    .cal-score { font-size: 8px; color: var(--correct); line-height: 1; margin-top: 1px; }
+    .cal-score { font-size: 7px; color: var(--correct); line-height: 1; margin-top: 0; }
     .cal-day.today .cal-score { color: #a8f0c6; }
     .cal-detail {
       background: var(--surface); border-radius: var(--radius);
-      padding: 16px; margin-top: 14px; box-shadow: var(--shadow);
+      padding: 8px; margin-top: 6px; box-shadow: var(--shadow);
     }
-    .cal-detail h3 { font-size: 15px; margin-bottom: 10px; }
+    .cal-detail h3 { font-size: 12px; margin-bottom: 4px; }
+    .cal-memo-title-input { font-size: 12px; padding: 4px; width: 100%; box-sizing: border-box; margin-bottom: 4px; }
     .cal-memo {
-      width: 100%; border: 1px solid var(--border); border-radius: 8px;
-      padding: 10px; font-size: 14px; font-family: inherit;
-      resize: vertical; min-height: 80px;
+      width: 100%; border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px; font-size: 12px; font-family: inherit;
+      resize: vertical; min-height: 70px;
     }
 
     /* Toggle */
@@ -711,7 +712,7 @@
       <button class="calendar-nav" onclick="Cal.nextMonth()">›</button>
     </div>
     <div class="calendar-grid" id="calendar-grid"></div>
-    <div class="cal-detail" id="cal-detail" style="display:none">
+    <div class="cal-detail" id="cal-detail">
       <h3 id="cal-detail-date"></h3>
       <div id="cal-stats-area" style="margin-bottom:10px"></div>
       <div class="editor-label">メモ・予定</div>
@@ -2203,8 +2204,6 @@ const Cal = {
   selectDate(dateStr) {
     this.selectedDate = dateStr;
     this.render(); // update selected highlight
-    const detail = document.getElementById('cal-detail');
-    detail.style.display = 'block';
     document.getElementById('cal-detail-date').textContent = dateStr.replace(/-/g, '/');
     const cd = State.calendarData[dateStr] || { sessions: [] };
     // 後方互換: 旧形式 memo のみの場合は内容として扱う
