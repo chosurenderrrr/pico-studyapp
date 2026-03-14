@@ -223,10 +223,10 @@
     .quiz-question {
       background: var(--surface); border-radius: var(--radius);
       padding: 20px; box-shadow: var(--shadow);
-      min-height: 100px; font-size: 16px; line-height: 1.6;
-      overflow-y: auto;
+      min-height: 200px; font-size: 16px; line-height: 1.6;
+      display: flex; flex-direction: column;
     }
-    .quiz-question img { display: block; max-width: 100%; max-height: none; width: auto; height: auto; object-fit: contain; border-radius: 8px; margin: 0 auto; }
+    .quiz-question img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 8px; margin: 0 auto; }
     .quiz-choices { display: flex; flex-direction: column; gap: 10px; }
     .quiz-choice {
       background: var(--surface); border: 2px solid var(--border);
@@ -1811,6 +1811,10 @@ const Quiz = {
     this.answered = false;
     this.currentPageIndex = 0;
 
+    // 選択肢をクリア（前の問題の残りを消す）
+    document.getElementById('quiz-choices').innerHTML = '';
+    document.getElementById('order-ui').style.display = 'none';
+
     // Question - 複数ページ対応
     const qEl = document.getElementById('quiz-question-content');
     const questions = p.questions || [{ type: p.questionType || 'text', content: p.question }];
@@ -1825,9 +1829,8 @@ const Quiz = {
       pageNav.style.display = 'none';
     }
 
-    // Last button label
-    document.getElementById('quiz-next-btn').textContent =
-      this.current + 1 >= this.problems.length ? '結果を見る →' : '次へ →';
+    // ボタンを「回答確定」に統一
+    document.getElementById('quiz-next-btn').textContent = '回答確定';
 
     if (p.problemType === 'order') {
       document.getElementById('quiz-choices').style.display = 'none';
