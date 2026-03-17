@@ -364,6 +364,17 @@
     }
     .toast.show { opacity: 1; }
 
+    /* GitHub modals */
+    .gh-section { margin-bottom: 18px; }
+    .gh-section-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .gh-row { display: flex; gap: 8px; align-items: stretch; }
+    .gh-row input { flex: 1; }
+    .gh-row .btn { width: auto; padding: 12px 16px; flex-shrink: 0; }
+    .gh-import-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .gh-import-row:last-child { border-bottom: none; }
+    .gh-import-name { font-size: 15px; }
+    .gh-new-repo-area { background: var(--bg); border-radius: 10px; padding: 14px; margin-top: 10px; }
+
     /* Quiz view layout */
     #view-quiz { height: 100vh; height: 100dvh; overflow: hidden; }
     #view-quiz .main { display: flex; flex-direction: column; gap: 14px; }
@@ -503,6 +514,8 @@
 <div class="view" id="view-home">
   <div class="header">
     <h1 id="home-title">StudyApp</h1>
+    <button class="header-btn" onclick="GHSync.openImport()" title="GitHubから取り込む">⬇️</button>
+    <button class="header-btn" onclick="GHSync.openSettings()" title="GitHub設定">🐙</button>
     <button class="header-btn" onclick="App.selectWorkspace()" title="ワークスペース変更">📁</button>
   </div>
   <div class="main" id="set-list-container">
@@ -749,6 +762,59 @@
       onkeydown="if(event.key==='Enter')App.createSet()">
     <button class="btn" onclick="App.createSet()">作成</button>
     <button class="btn secondary" onclick="document.getElementById('dialog-create-set').classList.remove('show')">キャンセル</button>
+  </div>
+</div>
+
+<!-- ===== GitHub Settings Modal ===== -->
+<div class="dialog-overlay" id="dialog-github-settings" onclick="if(event.target===this)GHSync.closeSettings()">
+  <div class="dialog">
+    <h3>⚙️ GitHub設定</h3>
+    <div class="gh-section">
+      <div class="gh-section-label">Personal Access Token</div>
+      <div class="gh-row">
+        <input type="password" id="gh-token-input" placeholder="ghp_xxxxxxxxxxxx">
+        <button class="btn small" onclick="GHSync.saveToken()">保存</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:6px">Settings → Developer settings → Personal access tokens で生成。スコープ: <strong>repo</strong></p>
+    </div>
+    <div class="gh-section">
+      <div class="gh-section-label">リポジトリ</div>
+      <select id="gh-repo-select" onchange="GHSync.selectRepo()" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius);font-size:15px;background:var(--surface);margin-bottom:8px">
+        <option value="">-- リポジトリを選択 --</option>
+      </select>
+      <button class="btn secondary small" style="width:auto" onclick="GHSync.loadRepoList()">🔄 一覧を再取得</button>
+      <button class="btn secondary small" style="width:auto;margin-left:8px" onclick="GHSync.showCreateRepo()">＋ 新規作成</button>
+      <div class="gh-new-repo-area" id="gh-new-repo-area" style="display:none">
+        <div class="gh-section-label">新規リポジトリ名</div>
+        <input type="text" id="gh-new-repo-name" placeholder="例: my-quiz-sets" style="margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px">
+          <input type="checkbox" id="gh-new-repo-private" checked> プライベートにする
+        </label>
+        <button class="btn small" onclick="GHSync.createRepo()">作成</button>
+        <button class="btn secondary small" onclick="document.getElementById('gh-new-repo-area').style.display='none'">キャンセル</button>
+      </div>
+    </div>
+    <button class="btn secondary" onclick="GHSync.closeSettings()">閉じる</button>
+  </div>
+</div>
+
+<!-- ===== GitHub Import Modal ===== -->
+<div class="dialog-overlay" id="dialog-github-import" onclick="if(event.target===this)GHSync.closeImport()">
+  <div class="dialog">
+    <h3>⬇️ GitHubから取り込む</h3>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">リポジトリ: <strong id="gh-import-repo-label"></strong></p>
+    <div id="gh-import-list" style="max-height:50vh;overflow-y:auto"></div>
+    <button class="btn secondary" style="margin-top:14px" onclick="GHSync.closeImport()">閉じる</button>
+  </div>
+</div>
+
+<!-- ===== Set Menu Modal ===== -->
+<div class="dialog-overlay" id="dialog-set-menu" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="dialog">
+    <h3 id="set-menu-title">メニュー</h3>
+    <button class="btn secondary" style="margin-bottom:10px" onclick="GHSync.uploadSet();document.getElementById('dialog-set-menu').classList.remove('show')">☁️ GitHubにアップロード</button>
+    <button class="btn danger" style="margin-bottom:10px" onclick="document.getElementById('dialog-set-menu').classList.remove('show');App._confirmDeleteSet()">🗑 削除</button>
+    <button class="btn secondary" onclick="document.getElementById('dialog-set-menu').classList.remove('show')">キャンセル</button>
   </div>
 </div>
 
@@ -1067,6 +1133,240 @@ const ProblemIO = {
   }
 };
 
+// ===== GitHub API =====
+const GitHubAPI = {
+  BASE: 'https://api.github.com',
+  getToken() { return localStorage.getItem('gh_token') || ''; },
+  setToken(t) { localStorage.setItem('gh_token', t); },
+  getRepo() { return localStorage.getItem('gh_repo') || ''; },
+  setRepo(r) { localStorage.setItem('gh_repo', r); },
+
+  async request(method, path, body) {
+    const token = this.getToken();
+    if (!token) throw new Error('TOKEN_REQUIRED');
+    const res = await fetch(`${this.BASE}${path}`, {
+      method,
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    return res.status === 204 ? null : res.json();
+  },
+
+  async listRepos() {
+    const repos = [];
+    let page = 1;
+    while (true) {
+      const data = await this.request('GET', `/user/repos?per_page=100&page=${page}&sort=updated`);
+      repos.push(...data);
+      if (data.length < 100) break;
+      page++;
+    }
+    return repos;
+  },
+
+  async createRepo(name, isPrivate) {
+    return this.request('POST', '/user/repos', { name, private: isPrivate, auto_init: true });
+  },
+
+  async listQuizSets() {
+    const repo = this.getRepo();
+    if (!repo) throw new Error('REPO_REQUIRED');
+    try {
+      const data = await this.request('GET', `/repos/${repo}/contents/quiz-sets`);
+      return Array.isArray(data) ? data.filter(f => f.name.endsWith('.json')) : [];
+    } catch (e) {
+      if (e.message.includes('Not Found') || e.message.includes('empty')) return [];
+      throw e;
+    }
+  },
+
+  async upload(setName, jsonData) {
+    const repo = this.getRepo();
+    const encodedName = encodeURIComponent(setName + '.json');
+    const path = `/repos/${repo}/contents/quiz-sets/${encodedName}`;
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(jsonData, null, 2))));
+    let sha;
+    try {
+      const existing = await this.request('GET', path);
+      sha = existing.sha;
+    } catch (e) { /* 新規作成 */ }
+    return this.request('PUT', path, {
+      message: `Update quiz set: ${setName}`,
+      content,
+      ...(sha ? { sha } : {})
+    });
+  },
+
+  async download(fileName) {
+    const repo = this.getRepo();
+    const data = await this.request('GET', `/repos/${repo}/contents/quiz-sets/${encodeURIComponent(fileName)}`);
+    return JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
+  }
+};
+
+// ===== GitHub Sync =====
+const GHSync = {
+  _remoteFiles: [],
+
+  async exportSet(setName) {
+    const setHandle = await FS.getDir(State.rootHandle, setName);
+    const problems = await ProblemIO.loadAll(setHandle);
+    const data = problems.map(({ handle: _h, ...p }) => p);
+    return { setName, problems: data, version: 1 };
+  },
+
+  async importSet(setName, jsonData) {
+    const setHandle = await FS.getDir(State.rootHandle, setName, true);
+    for (const problem of jsonData.problems) {
+      const { num: _n, handle: _h, ...rest } = problem;
+      await ProblemIO.save(setHandle, { ...rest });
+    }
+    return setHandle;
+  },
+
+  // --- 設定モーダル ---
+  async openSettings() {
+    document.getElementById('gh-token-input').value = GitHubAPI.getToken();
+    document.getElementById('gh-new-repo-area').style.display = 'none';
+    document.getElementById('dialog-github-settings').classList.add('show');
+    if (GitHubAPI.getToken()) await this.loadRepoList();
+  },
+
+  saveToken() {
+    const token = document.getElementById('gh-token-input').value.trim();
+    GitHubAPI.setToken(token);
+    showToast('トークンを保存しました');
+    if (token) this.loadRepoList();
+  },
+
+  async loadRepoList() {
+    const sel = document.getElementById('gh-repo-select');
+    sel.innerHTML = '<option value="">読み込み中...</option>';
+    try {
+      const repos = await GitHubAPI.listRepos();
+      const saved = GitHubAPI.getRepo();
+      sel.innerHTML = '<option value="">-- リポジトリを選択 --</option>';
+      repos.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.full_name;
+        opt.textContent = `${r.full_name} (${r.private ? '🔒' : '🌐'})`;
+        if (r.full_name === saved) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    } catch (e) {
+      sel.innerHTML = '<option value="">取得失敗: トークンを確認してください</option>';
+    }
+  },
+
+  selectRepo() {
+    const val = document.getElementById('gh-repo-select').value;
+    if (val) { GitHubAPI.setRepo(val); showToast(`リポジトリを設定: ${val}`); }
+  },
+
+  showCreateRepo() {
+    document.getElementById('gh-new-repo-area').style.display = '';
+  },
+
+  async createRepo() {
+    const name = document.getElementById('gh-new-repo-name').value.trim();
+    const isPrivate = document.getElementById('gh-new-repo-private').checked;
+    if (!name) { showToast('リポジトリ名を入力してください'); return; }
+    try {
+      Loading.show('リポジトリを作成中...');
+      const repo = await GitHubAPI.createRepo(name, isPrivate);
+      GitHubAPI.setRepo(repo.full_name);
+      Loading.hide();
+      showToast(`「${repo.full_name}」を作成しました`);
+      document.getElementById('gh-new-repo-area').style.display = 'none';
+      document.getElementById('gh-new-repo-name').value = '';
+      await this.loadRepoList();
+    } catch (e) {
+      Loading.hide();
+      showToast(`作成失敗: ${e.message}`);
+    }
+  },
+
+  closeSettings() {
+    document.getElementById('dialog-github-settings').classList.remove('show');
+  },
+
+  // --- アップロード ---
+  async uploadSet() {
+    if (!GitHubAPI.getToken()) { showToast('先にGitHub設定を行ってください'); this.openSettings(); return; }
+    if (!GitHubAPI.getRepo()) { showToast('リポジトリを選択してください'); this.openSettings(); return; }
+    const setName = State.currentSet.name;
+    try {
+      Loading.show(`「${setName}」をアップロード中...`);
+      const data = await this.exportSet(setName);
+      await GitHubAPI.upload(setName, data);
+      Loading.hide();
+      showToast(`「${setName}」をGitHubにアップロードしました ✓`);
+    } catch (e) {
+      Loading.hide();
+      showToast(`アップロード失敗: ${e.message}`);
+    }
+  },
+
+  // --- 取り込みモーダル ---
+  async openImport() {
+    if (!GitHubAPI.getToken()) { showToast('先にGitHub設定を行ってください'); this.openSettings(); return; }
+    if (!GitHubAPI.getRepo()) { showToast('リポジトリを選択してください'); this.openSettings(); return; }
+    document.getElementById('gh-import-repo-label').textContent = GitHubAPI.getRepo();
+    document.getElementById('gh-import-list').innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:16px">読み込み中...</p>';
+    document.getElementById('dialog-github-import').classList.add('show');
+    try {
+      this._remoteFiles = await GitHubAPI.listQuizSets();
+      this._renderImportList();
+    } catch (e) {
+      document.getElementById('gh-import-list').innerHTML = `<p style="color:var(--accent);padding:8px">取得失敗: ${e.message}</p>`;
+    }
+  },
+
+  _renderImportList() {
+    const container = document.getElementById('gh-import-list');
+    if (this._remoteFiles.length === 0) {
+      container.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:16px">GitHubに問題セットがありません</p>';
+      return;
+    }
+    container.innerHTML = '';
+    this._remoteFiles.forEach(f => {
+      const setName = f.name.replace(/\.json$/, '');
+      const row = document.createElement('div');
+      row.className = 'gh-import-row';
+      row.innerHTML = `<span class="gh-import-name">📝 ${setName}</span>
+        <button class="btn small" style="width:auto;padding:8px 14px" onclick="GHSync.downloadSet('${f.name}','${setName.replace(/'/g,"\\'")}')">取り込む</button>`;
+      container.appendChild(row);
+    });
+  },
+
+  async downloadSet(fileName, setName) {
+    try {
+      Loading.show(`「${setName}」を取り込み中...`);
+      const data = await GitHubAPI.download(fileName);
+      await this.importSet(setName, data);
+      await App.loadHome();
+      Loading.hide();
+      showToast(`「${setName}」を取り込みました ✓`);
+      document.getElementById('dialog-github-import').classList.remove('show');
+    } catch (e) {
+      Loading.hide();
+      showToast(`取り込み失敗: ${e.message}`);
+    }
+  },
+
+  closeImport() {
+    document.getElementById('dialog-github-import').classList.remove('show');
+  }
+};
+
 // ===== App =====
 const App = {
   async init() {
@@ -1205,7 +1505,11 @@ const App = {
   },
 
   showSetMenu() {
-    const actions = ['削除', 'キャンセル'];
+    document.getElementById('set-menu-title').textContent = `「${State.currentSet.name}」`;
+    document.getElementById('dialog-set-menu').classList.add('show');
+  },
+
+  _confirmDeleteSet() {
     if (confirm(`「${State.currentSet.name}」を削除しますか？\n（問題データもすべて削除されます）`)) {
       this._deleteSet();
     }
