@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>StudyApp</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -584,7 +586,8 @@
         <button class="tab-btn" onclick="Editor.setQuestionType('image',this)">画像</button>
       </div>
       <div id="q-text-area">
-        <textarea id="q-text" placeholder="問題文を入力してください"></textarea>
+        <textarea id="q-text" placeholder="問題文を入力してください" oninput="Editor.updateMathPreview('q-text','q-math-preview')"></textarea>
+        <div id="q-math-preview" style="display:none;margin-top:6px;padding:8px;background:#f8f8f8;border:1px solid var(--border);border-radius:8px;font-size:14px;min-height:32px;word-break:break-word"></div>
       </div>
       <div id="q-image-area" style="display:none">
         <img id="q-img-preview" class="img-preview" style="display:none">
@@ -636,7 +639,8 @@
         <button class="tab-btn" onclick="Editor.setExType('image',this)">画像</button>
       </div>
       <div id="ex-text-area">
-        <textarea id="ex-text" placeholder="解説を入力（任意）"></textarea>
+        <textarea id="ex-text" placeholder="解説を入力（任意）" oninput="Editor.updateMathPreview('ex-text','ex-math-preview')"></textarea>
+        <div id="ex-math-preview" style="display:none;margin-top:6px;padding:8px;background:#f8f8f8;border:1px solid var(--border);border-radius:8px;font-size:14px;min-height:32px;word-break:break-word"></div>
       </div>
       <div id="ex-image-area" style="display:none">
         <img id="ex-img-preview" class="img-preview" style="display:none">
@@ -2051,15 +2055,62 @@ const Editor = {
       showToast('削除しました');
       Nav.back();
     } catch { showToast('削除に失敗しました'); }
+  },
+
+  updateMathPreview(textareaId, previewId) {
+    const text = document.getElementById(textareaId).value;
+    const preview = document.getElementById(previewId);
+    if (!text.trim()) {
+      preview.style.display = 'none';
+      return;
+    }
+    preview.style.display = '';
+    preview.innerHTML = renderMath(text);
   }
 };
+
+// ===== Math Renderer =====
+function renderMath(text) {
+  if (!text) return '';
+  if (typeof katex === 'undefined') return escapeHtml(text);
+  // XSS対策：まずHTMLエスケープしてから数式部分のみKaTeXで処理
+  const parts = [];
+  // 一度すべてのマッチをリストアップしてから処理
+  const matches = [];
+  let m;
+  const combined = /\$\$([\s\S]+?)\$\$|\$([^\$\n]+?)\$/g;
+  while ((m = combined.exec(text)) !== null) {
+    matches.push({ index: m.index, length: m[0].length, expr: m[1] || m[2], block: m[1] !== undefined });
+  }
+
+  let cursor = 0;
+  for (const match of matches) {
+    if (match.index > cursor) {
+      parts.push(escapeHtml(text.slice(cursor, match.index)));
+    }
+    try {
+      parts.push(katex.renderToString(match.expr, { displayMode: match.block, throwOnError: true }));
+    } catch (e) {
+      parts.push(escapeHtml(match.block ? '$$' + match.expr + '$$' : '$' + match.expr + '$'));
+    }
+    cursor = match.index + match.length;
+  }
+  if (cursor < text.length) {
+    parts.push(escapeHtml(text.slice(cursor)));
+  }
+  return parts.join('');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ===== Choice Content Renderer =====
 function renderChoiceContent(choice) {
   if (choice && choice.type === 'image') {
     return `<img src="${choice.content}" style="max-width:100%;max-height:80px;border-radius:6px;display:block;margin:4px auto">`;
   }
-  return `<span>${choice ? choice.content : ''}</span>`;
+  return `<span>${renderMath(choice ? choice.content : '')}</span>`;
 }
 
 // ===== Quiz =====
@@ -2146,7 +2197,7 @@ const Quiz = {
     if (!page) return;
     qEl.innerHTML = page.type === 'image'
       ? `<img src="${page.content}" alt="問題">`
-      : `<span>${page.content}</span>`;
+      : `<div>${renderMath(page.content)}</div>`;
   },
 
   _updatePageNav(totalPages) {
@@ -2244,14 +2295,14 @@ const Quiz = {
     const wrongAnswerHtml = isCorrect ? '' :
         '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">正解の選択肢：</div>'
         + '<div style="font-size:14px;line-height:1.8">'
-        + (p.corrects || []).map(c => c.type === 'image' ? `<div style="margin:2px 0">${renderChoiceContent(c)}</div>` : `・${c.content}`).join('')
+        + (p.corrects || []).map(c => c.type === 'image' ? `<div style="margin:2px 0">${renderChoiceContent(c)}</div>` : `・${renderMath(c.content)}`).join('')
         + '</div>';
 
     if (p.explanation) {
       label.style.display = '';
       exEl.innerHTML = wrongAnswerHtml + (p.explanationType === 'image'
         ? `<img src="${p.explanation}" style="width:100%;border-radius:8px;margin-top:10px">`
-        : `<div style="margin-top:10px;font-size:14px">${p.explanation}</div>`);
+        : `<div style="margin-top:10px;font-size:14px">${renderMath(p.explanation)}</div>`);
       answerArea.classList.add('show');
     } else if (wrongAnswerHtml) {
       label.style.display = 'none';
@@ -2376,7 +2427,7 @@ const Quiz = {
     if (p.explanation) {
       html += p.explanationType === 'image'
         ? `<img src="${p.explanation}" style="width:100%;border-radius:8px;margin-top:10px">`
-        : `<div style="margin-top:10px;font-size:14px">${p.explanation}</div>`;
+        : `<div style="margin-top:10px;font-size:14px">${renderMath(p.explanation)}</div>`;
     }
 
     if (html) {
