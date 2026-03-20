@@ -41,3 +41,50 @@
 - 単一HTMLファイル（`index.html`）にインライン実装
 - 外部ライブラリ禁止（KaTeX CDN は今回限り例外として許可）
 - Android Chrome タッチ操作対応
+
+---
+
+## 機能概要：プルトゥリフレッシュ無効化・離脱防止ダイアログ
+
+### 要件
+1. スマホ（Android Chrome）でのプルトゥリフレッシュ（上スワイプによるページリロード）を全画面で無効化する
+2. ページリロード・タブ閉じ・ブラウザバック等の離脱操作時に確認ダイアログを表示する
+
+### 実装方針
+
+#### プルトゥリフレッシュ無効化
+- CSS に `html, body { overscroll-behavior-y: none; }` を追加
+- Android Chrome 63+ でネイティブ対応しているため、JS不要
+
+#### 離脱防止ダイアログ
+- `window.addEventListener('beforeunload', ...)` でブラウザ標準の確認ダイアログを表示
+- 常時有効（全操作中）
+- ダイアログのメッセージ文はブラウザが制御するため、カスタムメッセージは表示されない（仕様）
+
+### 対象範囲
+- アプリ全体（全画面・全操作）
+
+---
+
+## 機能概要：GitHub設定のフォルダ内永続化
+
+### 要件
+- PAT（Personal Access Token）とリポジトリ名を、選択済みフォルダ内の `data/github-config.json` に保存する
+- index.html を削除・差し替えた後でも、同じフォルダを選択すれば PAT・リポジトリ名が自動復元される
+
+### 実装方針
+
+#### 保存先
+- `{rootFolder}/data/github-config.json`
+- 内容：`{ "token": "ghp_...", "repo": "user/repo" }`
+
+#### 読み込みタイミング
+- `Data.init()` の最後に `loadGitHubConfig()` を呼び出し、ファイルから localStorage へ復元
+
+#### 書き込みタイミング
+- `GitHubAPI.setToken()` 実行時（localStorage への保存と同時にファイルへも書き込み）
+- `GitHubAPI.setRepo()` 実行時（同上）
+
+#### セキュリティ
+- ファイルはユーザーが選択したローカルフォルダ内に保存される（localStorage と同等のセキュリティレベル）
+- `data/` フォルダはクイズセット一覧から除外済みのため、UIには表示されない

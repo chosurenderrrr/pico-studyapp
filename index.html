@@ -29,6 +29,7 @@
       min-height: 100vh;
       max-width: 600px;
       margin: 0 auto;
+      overscroll-behavior-y: none;
     }
 
     /* Views */
@@ -1072,6 +1073,21 @@ const Data = {
     State.stats = await FS.readJSON(State.dataHandle, 'quiz-stats.json') || {};
     State.studyLog = await FS.readJSON(State.dataHandle, 'study-log.json') || [];
     State.calendarData = await FS.readJSON(State.dataHandle, 'calendar.json') || {};
+    await this.loadGitHubConfig();
+  },
+  async loadGitHubConfig() {
+    const config = await FS.readJSON(State.dataHandle, 'github-config.json');
+    if (config) {
+      if (config.token) localStorage.setItem('gh_token', config.token);
+      if (config.repo) localStorage.setItem('gh_repo', config.repo);
+    }
+  },
+  async saveGitHubConfig() {
+    if (!State.dataHandle) return;
+    await FS.writeJSON(State.dataHandle, 'github-config.json', {
+      token: GitHubAPI.getToken(),
+      repo: GitHubAPI.getRepo()
+    });
   },
   async saveStats() { await FS.writeJSON(State.dataHandle, 'quiz-stats.json', State.stats); },
   async saveLog() { await FS.writeJSON(State.dataHandle, 'study-log.json', State.studyLog); },
@@ -1141,9 +1157,9 @@ const ProblemIO = {
 const GitHubAPI = {
   BASE: 'https://api.github.com',
   getToken() { return localStorage.getItem('gh_token') || ''; },
-  setToken(t) { localStorage.setItem('gh_token', t); },
+  setToken(t) { localStorage.setItem('gh_token', t); Data.saveGitHubConfig(); },
   getRepo() { return localStorage.getItem('gh_repo') || ''; },
-  setRepo(r) { localStorage.setItem('gh_repo', r); },
+  setRepo(r) { localStorage.setItem('gh_repo', r); Data.saveGitHubConfig(); },
 
   async request(method, path, body) {
     const token = this.getToken();
@@ -2982,6 +2998,12 @@ const ImgEditor = {
 
 // ===== Boot =====
 App.init().catch(console.error);
+
+// ===== 離脱防止ダイアログ =====
+window.addEventListener('beforeunload', function(e) {
+  e.preventDefault();
+  e.returnValue = '';
+});
 </script>
 </body>
 </html>
