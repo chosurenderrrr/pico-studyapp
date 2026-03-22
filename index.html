@@ -1277,33 +1277,34 @@ const GitHubAPI = {
     if (!repo) throw new Error('REPO_REQUIRED');
     try {
       const data = await this.request('GET', `/repos/${repo}/contents/quiz-sets`);
-      return Array.isArray(data) ? data.filter(f => f.name.endsWith('.json')) : [];
+      return Array.isArray(data) ? data.filter(f => f.type === 'dir') : [];
     } catch (e) {
       if (e.message.includes('Not Found') || e.message.includes('empty')) return [];
       throw e;
     }
   },
 
-  async upload(setName, jsonData) {
+  async uploadFile(path, jsonData, message) {
     const repo = this.getRepo();
-    const encodedName = encodeURIComponent(setName + '.json');
-    const path = `/repos/${repo}/contents/quiz-sets/${encodedName}`;
+    const fullPath = `/repos/${repo}/contents/${path}`;
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(jsonData, null, 2))));
     let sha;
     try {
-      const existing = await this.request('GET', path);
+      const existing = await this.request('GET', fullPath);
       sha = existing.sha;
     } catch (e) { /* 新規作成 */ }
-    return this.request('PUT', path, {
-      message: `Update quiz set: ${setName}`,
-      content,
-      ...(sha ? { sha } : {})
-    });
+    return this.request('PUT', fullPath, { message, content, ...(sha ? { sha } : {}) });
   },
 
-  async download(fileName) {
+  async getTree() {
     const repo = this.getRepo();
-    const data = await this.request('GET', `/repos/${repo}/contents/quiz-sets/${encodeURIComponent(fileName)}`);
+    const data = await this.request('GET', `/repos/${repo}/git/trees/HEAD?recursive=1`);
+    return data.tree || [];
+  },
+
+  async getBlob(sha) {
+    const repo = this.getRepo();
+    const data = await this.request('GET', `/repos/${repo}/git/blobs/${sha}`);
     return JSON.parse(decodeURIComponent(escape(atob(data.content.replace(/\n/g, '')))));
   }
 };
@@ -1399,10 +1400,16 @@ const GHSync = {
     if (!GitHubAPI.getToken()) { showToast('先にGitHub設定を行ってください'); this.openSettings(); return; }
     if (!GitHubAPI.getRepo()) { showToast('リポジトリを選択してください'); this.openSettings(); return; }
     const setName = State.currentSet.name;
+    const problems = State.problems;
+    if (problems.length === 0) { showToast('問題がありません'); return; }
     try {
-      Loading.show(`「${setName}」をアップロード中...`);
-      const data = await this.exportSet(setName);
-      await GitHubAPI.upload(setName, data);
+      for (let i = 0; i < problems.length; i++) {
+        Loading.show(`「${setName}」アップロード中... ${i + 1}/${problems.length}`);
+        const { handle: _h, ...p } = problems[i];
+        const num = String(p.num).padStart(3, '0');
+        const path = `quiz-sets/${setName}/${num}/problem.json`;
+        await GitHubAPI.uploadFile(path, p, `Update: ${setName}/${num}`);
+      }
       Loading.hide();
       showToast(`「${setName}」をGitHubにアップロードしました ✓`);
     } catch (e) {
@@ -1434,20 +1441,28 @@ const GHSync = {
     }
     container.innerHTML = '';
     this._remoteFiles.forEach(f => {
-      const setName = f.name.replace(/\.json$/, '');
+      const setName = f.name;
       const row = document.createElement('div');
       row.className = 'gh-import-row';
-      row.innerHTML = `<span class="gh-import-name">📝 ${setName}</span>
-        <button class="btn small" style="width:auto;padding:8px 14px" onclick="GHSync.downloadSet('${f.name}','${setName.replace(/'/g,"\\'")}')">取り込む</button>`;
+      row.innerHTML = `<span class="gh-import-name">📁 ${setName}</span>
+        <button class="btn small" style="width:auto;padding:8px 14px" onclick="GHSync.downloadSet('${setName.replace(/'/g,"\\'")}')">取り込む</button>`;
       container.appendChild(row);
     });
   },
 
-  async downloadSet(fileName, setName) {
+  async downloadSet(setName) {
     try {
       Loading.show(`「${setName}」を取り込み中...`);
-      const data = await GitHubAPI.download(fileName);
-      await this.importSet(setName, data);
+      const tree = await GitHubAPI.getTree();
+      const prefix = `quiz-sets/${setName}/`;
+      const blobs = tree.filter(f => f.type === 'blob' && f.path.startsWith(prefix) && f.path.endsWith('/problem.json'));
+      if (blobs.length === 0) { Loading.hide(); showToast('問題が見つかりませんでした'); return; }
+      const setHandle = await FS.getDir(State.rootHandle, setName, true);
+      for (let i = 0; i < blobs.length; i++) {
+        Loading.show(`「${setName}」取り込み中... ${i + 1}/${blobs.length}`);
+        const problem = await GitHubAPI.getBlob(blobs[i].sha);
+        await ProblemIO.save(setHandle, problem);
+      }
       await App.loadHome();
       Loading.hide();
       showToast(`「${setName}」を取り込みました ✓`);
@@ -2552,6 +2567,7 @@ const Quiz = {
     explainBtn.style.display = p.explanation ? '' : 'none';
     nextBtn.textContent = '次へ →';
     bar.classList.add('show');
+    setTimeout(() => this.scrollToExplanation(), 100);
   },
 
   renderOrder(p) {
@@ -2676,8 +2692,8 @@ const Quiz = {
     explainBtn.style.display = p.explanation ? '' : 'none';
     nextBtn.textContent = '次へ →';
     bar.classList.add('show');
+    setTimeout(() => this.scrollToExplanation(), 100);
   },
-
 
   scrollToExplanation() {
     const el = document.getElementById('quiz-answer-area');

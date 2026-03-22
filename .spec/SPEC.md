@@ -166,6 +166,106 @@
 
 ---
 
+## 機能概要：GitHub フォルダ形式アップロード・ダウンロード
+
+### 要件
+- アップロード：1セット＝複数ファイル（問題別）形式に変更
+- ダウンロード：GitHub 上のフォルダ構造から問題別にダウンロード
+- 旧 combined JSON 形式（`quiz-sets/セット名.json`）は廃止
+
+### GitHub 上のパス構造
+```
+quiz-sets/
+  セット名/
+    001/
+      problem.json
+    002/
+      problem.json
+    ...
+```
+- 問題番号はゼロ埋め3桁（ローカルと同じ形式）
+
+---
+
+### アップロード変更点
+
+#### 現状
+- `PUT /repos/{repo}/contents/quiz-sets/{setName}.json`（1ファイル）
+
+#### 変更後
+- 問題ごとに `PUT /repos/{repo}/contents/quiz-sets/{setName}/{num}/problem.json`
+- 既存ファイルの SHA を事前取得して上書き対応
+- ローディング表示に進捗（`1/N` 形式）を表示
+- 既存の combined JSON (`quiz-sets/{setName}.json`) は削除しない（残存しても問題なし）
+
+#### 実装
+```javascript
+async uploadSet() {
+  // 問題ごとに PUT
+  for (let i = 0; i < problems.length; i++) {
+    const num = String(problems[i].num).padStart(3, '0');
+    const path = `quiz-sets/${setName}/${num}/problem.json`;
+    await GitHubAPI.uploadFile(path, problem, `Update: ${setName}/${num}`);
+    Loading.show(`アップロード中... ${i+1}/${problems.length}`);
+  }
+}
+```
+
+---
+
+### ダウンロード変更点
+
+#### 現状
+- `GET /repos/{repo}/contents/quiz-sets/` でファイル一覧（`.json` ファイル）を取得
+
+#### 変更後（2ステップ）
+
+**ステップ1: セット一覧取得**
+- `GET /repos/{repo}/contents/quiz-sets/` → `type === 'dir'` のみ取得
+
+**ステップ2: セット内の問題を一括取得（git tree API 使用）**
+- `GET /repos/{repo}/git/trees/HEAD?recursive=1`
+- `quiz-sets/{setName}/XXX/problem.json` に一致するエントリを抽出
+- 各エントリの SHA で `GET /repos/{repo}/git/blobs/{sha}` → base64 デコード → JSON パース
+- ローカルの `ProblemIO.save()` で書き込み
+- ローディング表示に進捗を表示
+
+---
+
+### GitHubAPI 変更点
+
+追加メソッド：
+- `GitHubAPI.uploadFile(path, jsonData, message)` — 汎用ファイル PUT（SHA 自動取得）
+- `GitHubAPI.getTree()` — `GET /repos/{repo}/git/trees/HEAD?recursive=1`
+- `GitHubAPI.getBlob(sha)` — `GET /repos/{repo}/git/blobs/{sha}` → JSON
+
+変更メソッド：
+- `GitHubAPI.listQuizSets()` — `type === 'dir'` に変更
+- `GitHubAPI.upload()` は `uploadFile()` に統合（旧メソッドは削除）
+- `GitHubAPI.download()` は `getTree()` + `getBlob()` に置き換え
+
+---
+
+### GHSync 変更点
+
+- `uploadSet()` — 問題ごとにループして `uploadFile()` を呼び出す
+- `downloadSet(setName)` — `getTree()` でパス一覧取得 → `getBlob()` で各問題取得 → `ProblemIO.save()` で保存
+- インポートダイアログのセット選択部分は変更なし（セット名のみ渡す）
+
+---
+
+## 機能概要：回答後の自動スクロール
+
+### 要件
+- 選択問題・整序問題どちらも、回答確定後に自動で解説エリアへスクロールする
+- 正解・不正解に関わらず動作する
+
+### 実装方針
+- `confirmMultipleChoice` と `confirmOrder` の末尾（`bar.classList.add('show')` の直後）に `this.scrollToExplanation()` を呼び出す
+- 既存の `scrollToExplanation()` をそのまま流用
+
+---
+
 ## 機能概要：プルトゥリフレッシュ無効化・離脱防止ダイアログ
 
 ### 要件

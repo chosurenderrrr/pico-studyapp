@@ -43,3 +43,19 @@
 - [x] 全問完了時に `Data.clearProgress()` を呼び出す（`Quiz.finish()`）
 - [x] 1問選択後の出題・結果後の view-problem-select への復帰
 - [x] `Quiz.backFromResult()` / `retryFromResult()` を追加
+
+### 2026-03-22：回答後の自動スクロール
+
+- [x] `confirmMultipleChoice` の末尾に `scrollToExplanation()` を追加
+- [x] `confirmOrder` の末尾に `scrollToExplanation()` を追加
+
+### 2026-03-22：GitHub フォルダ形式アップロード・ダウンロード
+
+- [x] `GitHubAPI.uploadFile(path, jsonData, message)` を追加
+- [x] `GitHubAPI.getTree()` を追加（`git/trees/HEAD?recursive=1`）
+- [x] `GitHubAPI.getBlob(sha)` を追加
+- [x] `GitHubAPI.listQuizSets()` を `type === 'dir'` に変更
+- [x] `GitHubAPI.upload()` / `download()` を削除（uploadFile / getBlob に統合）
+- [x] `GHSync.uploadSet()` を問題別ループ形式に変更（進捗表示付き）
+- [x] `GHSync.downloadSet(setName)` をフォルダ形式に変更（getTree + getBlob）
+- [x] `_renderImportList()` の引数を `setName` のみに変更
