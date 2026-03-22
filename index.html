@@ -1457,10 +1457,11 @@ const GHSync = {
       const prefix = `quiz-sets/${setName}/`;
       const blobs = tree.filter(f => f.type === 'blob' && f.path.startsWith(prefix) && f.path.endsWith('/problem.json'));
       if (blobs.length === 0) { Loading.hide(); showToast('問題が見つかりませんでした'); return; }
-      const setHandle = await FS.getDir(State.rootHandle, setName, true);
+      await FS.getDir(State.rootHandle, setName, true);
       for (let i = 0; i < blobs.length; i++) {
         Loading.show(`「${setName}」取り込み中... ${i + 1}/${blobs.length}`);
         const problem = await GitHubAPI.getBlob(blobs[i].sha);
+        const setHandle = await FS.getDir(State.rootHandle, setName, true);
         await ProblemIO.save(setHandle, problem);
       }
       await App.loadHome();

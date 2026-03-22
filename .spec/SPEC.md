@@ -254,6 +254,21 @@ async uploadSet() {
 
 ---
 
+## バグ修正：GitHub ダウンロード時の stale ハンドルエラー
+
+### 症状
+- 100問程度の大きなクイズセットをGitHubから取り込む際に `An operation that depends on state cached in an interface object was...` エラーが発生する
+
+### 原因
+- Chrome の File System Access API の挙動として、`getDirectoryHandle({ create: true })` でサブディレクトリを作成すると、親ディレクトリハンドルのキャッシュ状態が無効化される
+- 同じ `setHandle` を使い回して100問分のサブディレクトリを連続作成すると stale 状態になりエラーが発生する
+
+### 修正方針
+- `downloadSet()` のループ内で毎回 `State.rootHandle` から `setHandle` を再取得する
+- `await FS.getDir(State.rootHandle, setName, true)` を各ループ先頭で呼び出す
+
+---
+
 ## 機能概要：回答後の自動スクロール
 
 ### 要件
