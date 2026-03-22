@@ -59,3 +59,7 @@
 - [x] `GHSync.uploadSet()` を問題別ループ形式に変更（進捗表示付き）
 - [x] `GHSync.downloadSet(setName)` をフォルダ形式に変更（getTree + getBlob）
 - [x] `_renderImportList()` の引数を `setName` のみに変更
+
+### 2026-03-22：ウェルカム画面スマホ表示修正
+
+- [x] `welcome-new` に `width:100%` を追加（ボタンが全幅表示されない問題を修正）
