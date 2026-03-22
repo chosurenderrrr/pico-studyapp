@@ -378,6 +378,17 @@
     .gh-import-name { font-size: 15px; }
     .gh-new-repo-area { background: var(--bg); border-radius: 10px; padding: 14px; margin-top: 10px; }
 
+    /* Mode Select */
+    .mode-section-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; font-weight: 600; }
+    .mode-btn-group { display: flex; gap: 8px; margin-bottom: 4px; }
+    .mode-btn { flex: 1; padding: 14px 8px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); font-size: 15px; font-weight: 600; cursor: pointer; }
+    .mode-btn.selected { border-color: var(--primary); color: var(--primary); background: #e8f4ff; }
+    .count-btn-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .count-btn { padding: 14px 8px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+    .count-btn.selected { border-color: var(--primary); color: var(--primary); background: #e8f4ff; }
+    .count-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .mode-divider { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
     /* Quiz view layout */
     #view-quiz { height: 100vh; height: 100dvh; overflow: hidden; }
     #view-quiz .main { display: flex; flex-direction: column; gap: 14px; }
@@ -540,19 +551,74 @@
     <button class="header-btn" onclick="App.showSetMenu()">⋮</button>
   </div>
   <div class="main">
-    <div class="card" style="padding:12px;margin-bottom:16px">
-      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">出題モード</div>
-      <div style="display:flex;gap:8px">
-        <button class="btn small" onclick="App.startQuiz('all')" style="flex:1">全問</button>
-        <button class="btn small secondary" onclick="App.startQuiz('weak')" style="flex:1">苦手</button>
-        <button class="btn small secondary" onclick="App.startQuiz('missed')" style="flex:1">前回ミス</button>
-      </div>
-    </div>
+    <button class="btn" style="margin-bottom:16px" onclick="Nav.go('mode-select')">▶ 出題モードを選ぶ</button>
     <div id="problem-list-container">
       <div class="empty"><div class="empty-icon">✏️</div><p>問題がありません<br>右下の＋ボタンから追加してください</p></div>
     </div>
   </div>
   <button class="fab" onclick="App.showEditor(null)">＋</button>
+</div>
+
+<!-- ===== Mode Select ===== -->
+<div class="view" id="view-mode-select">
+  <div class="header">
+    <button class="header-btn" onclick="Nav.back()">‹</button>
+    <h1 id="mode-select-title">出題モード</h1>
+    <span></span>
+  </div>
+  <div class="main">
+    <!-- 続きから再開 -->
+    <div id="resume-section" style="display:none">
+      <button class="btn" id="resume-btn" onclick="ModeSelect.resume()"></button>
+    </div>
+
+    <!-- 順番・ランダム -->
+    <div class="card" style="padding:16px;margin-bottom:0">
+      <div class="mode-section-title">出題モード</div>
+      <div class="mode-btn-group">
+        <button class="mode-btn" id="mode-btn-order" onclick="ModeSelect.selectMode('order')">順番で出題</button>
+        <button class="mode-btn" id="mode-btn-random" onclick="ModeSelect.selectMode('random')">ランダム</button>
+      </div>
+      <div id="count-section" style="display:none;margin-top:14px">
+        <div class="mode-section-title">出題数</div>
+        <div class="count-btn-group">
+          <button class="count-btn" data-count="25" onclick="ModeSelect.selectCount(25)">25問</button>
+          <button class="count-btn" data-count="50" onclick="ModeSelect.selectCount(50)">50問</button>
+          <button class="count-btn" data-count="100" onclick="ModeSelect.selectCount(100)">100問</button>
+          <button class="count-btn" data-count="all" onclick="ModeSelect.selectCount(null)">全部</button>
+        </div>
+        <button class="btn" id="mode-start-btn" onclick="ModeSelect.start()" style="margin-top:14px" disabled>開始する</button>
+      </div>
+    </div>
+
+    <hr class="mode-divider">
+
+    <!-- 1問選択 -->
+    <button class="btn secondary" onclick="ModeSelect.goSingleSelect()">1問を選んで解く</button>
+
+    <hr class="mode-divider">
+
+    <!-- 苦手・前回ミス -->
+    <button class="btn secondary" onclick="App.startQuizFiltered('weak')">苦手問題を解く</button>
+    <button class="btn secondary" onclick="App.startQuizFiltered('missed')">前回ミスした問題を解く</button>
+
+    <hr class="mode-divider">
+
+    <!-- 問題を編集 -->
+    <button class="btn secondary" onclick="ModeSelect.goEdit()">問題を編集する</button>
+  </div>
+</div>
+
+<!-- ===== Problem Select ===== -->
+<div class="view" id="view-problem-select">
+  <div class="header">
+    <button class="header-btn" onclick="Nav.back()">‹</button>
+    <h1>問題を選ぶ</h1>
+    <span></span>
+  </div>
+  <div class="main">
+    <div id="problem-select-list"></div>
+  </div>
 </div>
 
 <!-- ===== Editor ===== -->
@@ -706,8 +772,8 @@
   <div class="result-icon" id="result-icon">🎉</div>
   <div class="result-score" id="result-score"></div>
   <div class="result-label" id="result-label"></div>
-  <button class="btn" onclick="Nav.go('set-detail')">問題一覧に戻る</button>
-  <button class="btn secondary" onclick="App.startQuiz(Quiz.lastMode)">もう一度</button>
+  <button class="btn" onclick="Quiz.backFromResult()">一覧に戻る</button>
+  <button class="btn secondary" onclick="Quiz.retryFromResult()">もう一度</button>
   <button class="btn secondary" onclick="goHome()">🏠 ホームへ</button>
 </div>
 
@@ -916,6 +982,7 @@ const State = {
   stats: {},
   studyLog: [],
   calendarData: {},
+  progress: {},
 };
 
 // ===== Utils =====
@@ -1073,6 +1140,7 @@ const Data = {
     State.stats = await FS.readJSON(State.dataHandle, 'quiz-stats.json') || {};
     State.studyLog = await FS.readJSON(State.dataHandle, 'study-log.json') || [];
     State.calendarData = await FS.readJSON(State.dataHandle, 'calendar.json') || {};
+    State.progress = await FS.readJSON(State.dataHandle, 'quiz-progress.json') || {};
     await this.loadGitHubConfig();
   },
   async loadGitHubConfig() {
@@ -1092,6 +1160,14 @@ const Data = {
   async saveStats() { await FS.writeJSON(State.dataHandle, 'quiz-stats.json', State.stats); },
   async saveLog() { await FS.writeJSON(State.dataHandle, 'study-log.json', State.studyLog); },
   async saveCalendar() { await FS.writeJSON(State.dataHandle, 'calendar.json', State.calendarData); },
+  async saveProgress(setName, data) {
+    State.progress[setName] = data;
+    await FS.writeJSON(State.dataHandle, 'quiz-progress.json', State.progress);
+  },
+  async clearProgress(setName) {
+    delete State.progress[setName];
+    await FS.writeJSON(State.dataHandle, 'quiz-progress.json', State.progress);
+  },
 
   key(setName, num) { return `${setName}/${num}`; },
   getStat(setName, num) {
@@ -1387,6 +1463,109 @@ const GHSync = {
   }
 };
 
+// ===== ModeSelect =====
+const ModeSelect = {
+  selectedMode: null,
+  selectedCount: undefined,
+
+  init() {
+    this.selectedMode = null;
+    this.selectedCount = undefined;
+    document.getElementById('mode-select-title').textContent = State.currentSet.name;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById('count-section').style.display = 'none';
+    document.getElementById('mode-start-btn').disabled = true;
+
+    const prog = State.progress && State.progress[State.currentSet.name];
+    const resumeSection = document.getElementById('resume-section');
+    if (prog && prog.currentIndex < prog.sequence.length) {
+      const modeLabel = prog.mode === 'random' ? 'ランダム' : '順番';
+      const countLabel = prog.count ? `${prog.count}問` : '全問';
+      const remaining = prog.sequence.length - prog.currentIndex;
+      document.getElementById('resume-btn').textContent =
+        `▶ 続きから再開（${modeLabel}・${countLabel} / 残り${remaining}問）`;
+      resumeSection.style.display = '';
+    } else {
+      resumeSection.style.display = 'none';
+    }
+  },
+
+  selectMode(mode) {
+    this.selectedMode = mode;
+    this.selectedCount = undefined;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById(`mode-btn-${mode}`).classList.add('selected');
+    document.querySelectorAll('.count-btn').forEach(b => {
+      b.classList.remove('selected');
+      const cnt = b.dataset.count === 'all' ? null : parseInt(b.dataset.count);
+      b.disabled = cnt !== null && cnt > State.problems.length;
+    });
+    document.getElementById('mode-start-btn').disabled = true;
+    document.getElementById('count-section').style.display = '';
+  },
+
+  selectCount(count) {
+    this.selectedCount = count;
+    document.querySelectorAll('.count-btn').forEach(b => {
+      const cnt = b.dataset.count === 'all' ? null : parseInt(b.dataset.count);
+      b.classList.toggle('selected', cnt === count);
+    });
+    document.getElementById('mode-start-btn').disabled = false;
+  },
+
+  start() {
+    if (!this.selectedMode || this.selectedCount === undefined) return;
+    App.startQuizWithMode({ type: this.selectedMode, count: this.selectedCount, sequence: null, startIndex: 0 });
+  },
+
+  resume() {
+    const prog = State.progress[State.currentSet.name];
+    App.startQuizWithMode({
+      type: prog.mode, count: prog.count,
+      sequence: prog.sequence, startIndex: prog.currentIndex
+    });
+  },
+
+  goSingleSelect() {
+    ProblemSelect.init();
+    Nav.go('problem-select');
+  },
+
+  goEdit() {
+    App.renderProblemList();
+    Nav.go('set-detail');
+  }
+};
+
+// ===== ProblemSelect =====
+const ProblemSelect = {
+  init() {
+    const list = document.getElementById('problem-select-list');
+    list.innerHTML = '';
+    if (State.problems.length === 0) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">✏️</div><p>問題がありません</p></div>';
+      return;
+    }
+    for (const p of State.problems) {
+      let displayText;
+      if (p.title) {
+        displayText = p.title;
+      } else if (p.questions && p.questions.length > 0) {
+        const firstPage = p.questions[0];
+        displayText = firstPage.type === 'image' ? '🖼 画像問題' : (firstPage.content ? firstPage.content.substring(0, 28) : '（空）');
+      } else {
+        displayText = p.questionType === 'text' ? (p.question ? p.question.substring(0, 28) : '（空）') : '🖼 画像問題';
+      }
+      const typeIcon = p.problemType === 'order' ? '🔢 ' : '';
+      const btn = document.createElement('button');
+      btn.className = 'problem-item';
+      btn.innerHTML = `<span class="problem-num">${String(p.num).padStart(3,'0')}</span><span class="problem-preview">${typeIcon}${displayText}</span>`;
+      btn.onclick = () => App.startQuizWithMode({ type: 'single', problem: p });
+      list.appendChild(btn);
+    }
+  }
+};
+
 // ===== App =====
 const App = {
   async init() {
@@ -1462,8 +1641,8 @@ const App = {
     } finally {
       Loading.hide();
     }
-    this.renderProblemList();
-    Nav.go('set-detail');
+    ModeSelect.init();
+    Nav.go('mode-select');
   },
 
   renderProblemList() {
@@ -1544,28 +1723,61 @@ const App = {
     } catch { showToast('削除に失敗しました'); }
   },
 
-  async startQuiz(mode) {
+  async startQuizFiltered(filter) {
     let problems = [...State.problems];
     if (problems.length === 0) { showToast('問題がありません'); return; }
-
-    if (mode === 'weak') {
+    if (filter === 'weak') {
       problems = problems.filter(p => {
         const s = Data.getStat(State.currentSet.name, p.num);
         const total = s.correct + s.wrong;
         return total === 0 || s.correct / total < 0.6;
       });
       if (problems.length === 0) { showToast('苦手な問題はありません 🎉'); return; }
-    } else if (mode === 'missed') {
+    } else if (filter === 'missed') {
       problems = problems.filter(p => Data.getStat(State.currentSet.name, p.num).lastResult === 'wrong');
       if (problems.length === 0) { showToast('前回ミスした問題はありません 👍'); return; }
     }
-
-    // Shuffle
     for (let i = problems.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [problems[i], problems[j]] = [problems[j], problems[i]];
     }
-    Quiz.start(problems, mode);
+    Quiz.start(problems, { type: filter });
+  },
+
+  async startQuizWithMode(modeObj) {
+    if (modeObj.type === 'single') {
+      Quiz.start([modeObj.problem], modeObj);
+      return;
+    }
+
+    let sequence, baseIndex;
+    if (modeObj.sequence) {
+      sequence = modeObj.sequence;
+      baseIndex = modeObj.startIndex || 0;
+    } else {
+      let all = [...State.problems];
+      if (modeObj.type === 'order') {
+        all.sort((a, b) => a.num - b.num);
+      } else {
+        for (let i = all.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [all[i], all[j]] = [all[j], all[i]];
+        }
+      }
+      const cnt = modeObj.count !== null && modeObj.count !== undefined
+        ? Math.min(modeObj.count, all.length) : all.length;
+      sequence = all.slice(0, cnt).map(p => p.num);
+      baseIndex = 0;
+      await Data.saveProgress(State.currentSet.name, {
+        mode: modeObj.type, count: modeObj.count,
+        sequence, currentIndex: 0
+      });
+    }
+
+    const numMap = new Map(State.problems.map(p => [p.num, p]));
+    const problems = sequence.slice(baseIndex).map(n => numMap.get(n)).filter(Boolean);
+    if (problems.length === 0) { showToast('問題がありません'); return; }
+    Quiz.start(problems, { ...modeObj, sequence, baseIndex });
   }
 };
 
@@ -2146,12 +2358,13 @@ const Quiz = {
   mcChoicesData: [],          // 表示中の選択肢データ [{content, isCorrect}]
   currentPageIndex: 0,        // 現在の問題ページ
 
-  start(problems, mode) {
+  start(problems, modeObj) {
     this.problems = problems;
+    this.modeObj = modeObj;
     this.current = 0;
     this.correctCount = 0;
     this.answered = false;
-    this.lastMode = mode;
+    this.lastMode = modeObj;
     this.sessionResults = [];
     this.sessionStartTime = Date.now();
     this.problemTimes = {};
@@ -2482,18 +2695,34 @@ const Quiz = {
       }
       return;
     }
+    // 続きから機能: 回答後に進捗を保存
+    const m = this.modeObj;
+    if (m && m.sequence && m.type !== 'single') {
+      const newIndex = (m.baseIndex || 0) + this.current + 1;
+      Data.saveProgress(State.currentSet.name, {
+        mode: m.type, count: m.count,
+        sequence: m.sequence, currentIndex: newIndex
+      }).catch(() => {});
+    }
     this.current++;
     if (this.current >= this.problems.length) this.finish();
     else this.render();
   },
 
   async finish() {
+    // 全問完了: 続きから進捗をクリア
+    const m = this.modeObj;
+    if (m && m.sequence && m.type !== 'single') {
+      await Data.clearProgress(State.currentSet.name);
+    }
+
     const total = this.problems.length;
     const rate = Math.round(this.correctCount / total * 100);
     const duration = Math.round((Date.now() - this.sessionStartTime) / 1000);
+    const modeLabel = m && m.type ? m.type : (this.lastMode || 'unknown');
     const log = {
       date: today(), setName: State.currentSet.name,
-      mode: this.lastMode, total, correct: this.correctCount, rate,
+      mode: modeLabel, total, correct: this.correctCount, rate,
       duration, problemTimes: { ...this.problemTimes }
     };
     State.studyLog.push(log);
@@ -2510,6 +2739,24 @@ const Quiz = {
     document.getElementById('result-label').textContent = `${total}問中 ${this.correctCount}問正解`;
     document.getElementById('result-icon').textContent = rate >= 80 ? '🎉' : rate >= 50 ? '🤔' : '😢';
     Nav.replace('result');
+  },
+
+  backFromResult() {
+    if (this.modeObj && this.modeObj.type === 'single') {
+      ProblemSelect.init();
+      Nav.go('problem-select');
+    } else {
+      ModeSelect.init();
+      Nav.go('mode-select');
+    }
+  },
+
+  retryFromResult() {
+    if (this.modeObj && this.modeObj.type === 'single') {
+      Quiz.start(this.problems, this.modeObj);
+    } else {
+      App.startQuizWithMode({ type: this.modeObj.type, count: this.modeObj.count, sequence: null, startIndex: 0 });
+    }
   },
 
   abort() { Nav.back(); }

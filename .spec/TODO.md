@@ -26,3 +26,20 @@
 - [x] `Data.init()` で `loadGitHubConfig()` を呼び出し
 - [x] `GitHubAPI.setToken()` で `saveGitHubConfig()` を呼び出し
 - [x] `GitHubAPI.setRepo()` で `saveGitHubConfig()` を呼び出し
+
+### 2026-03-22：出題モード選択・続きから機能
+
+- [x] HTML：`view-mode-select` 画面を追加
+- [x] HTML：`view-problem-select` 画面を追加
+- [x] CSS：モード選択・1問選択画面のスタイル追加
+- [x] `Data.saveProgress()` / `clearProgress()` を追加
+- [x] `Data.init()` で `quiz-progress.json` を読み込み
+- [x] `App.openSet()` の遷移先を `view-mode-select` に変更
+- [x] `ModeSelect` モジュールを追加（モード選択・続きから・1問選択・苦手・前回ミス）
+- [x] `ProblemSelect` モジュールを追加（1問選択画面）
+- [x] `App.startQuizWithMode(modeObj)` を実装
+- [x] `Quiz.start()` の modeObj 対応
+- [x] 回答ごとに `Data.saveProgress()` を呼び出す（`Quiz.next()`）
+- [x] 全問完了時に `Data.clearProgress()` を呼び出す（`Quiz.finish()`）
+- [x] 1問選択後の出題・結果後の view-problem-select への復帰
+- [x] `Quiz.backFromResult()` / `retryFromResult()` を追加
