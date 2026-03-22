@@ -264,8 +264,11 @@ async uploadSet() {
 - 同じ `setHandle` を使い回して100問分のサブディレクトリを連続作成すると stale 状態になりエラーが発生する
 
 ### 修正方針
-- `downloadSet()` のループ内で毎回 `State.rootHandle` から `setHandle` を再取得する
-- `await FS.getDir(State.rootHandle, setName, true)` を各ループ先頭で呼び出す
+- `downloadSet()` を2フェーズに分割する
+  - フェーズ1：GitHub API から全問題データをメモリに取得（FS書き込みなし）
+  - フェーズ2：毎回 `IDB.loadHandle()` でフレッシュな rootHandle を取得してから FS 書き込み
+- `State.rootHandle` は多数の書き込み後に stale になるため使用しない
+- IDB から取得したハンドルは毎回デシリアライズされた新しいオブジェクトのため stale にならない
 
 ---
 

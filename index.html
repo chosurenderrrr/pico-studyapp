@@ -1452,17 +1452,22 @@ const GHSync = {
 
   async downloadSet(setName) {
     try {
-      Loading.show(`「${setName}」を取り込み中...`);
+      // フェーズ1：GitHubから全データをメモリに取得
       const tree = await GitHubAPI.getTree();
       const prefix = `quiz-sets/${setName}/`;
       const blobs = tree.filter(f => f.type === 'blob' && f.path.startsWith(prefix) && f.path.endsWith('/problem.json'));
-      if (blobs.length === 0) { Loading.hide(); showToast('問題が見つかりませんでした'); return; }
-      await FS.getDir(State.rootHandle, setName, true);
+      if (blobs.length === 0) { showToast('問題が見つかりませんでした'); return; }
+      const problems = [];
       for (let i = 0; i < blobs.length; i++) {
-        Loading.show(`「${setName}」取り込み中... ${i + 1}/${blobs.length}`);
-        const problem = await GitHubAPI.getBlob(blobs[i].sha);
-        const setHandle = await FS.getDir(State.rootHandle, setName, true);
-        await ProblemIO.save(setHandle, problem);
+        Loading.show(`「${setName}」ダウンロード中... ${i + 1}/${blobs.length}`);
+        problems.push(await GitHubAPI.getBlob(blobs[i].sha));
+      }
+      // フェーズ2：FS書き込み（毎回IDBからフレッシュなrootHandleを取得してstale回避）
+      for (let i = 0; i < problems.length; i++) {
+        Loading.show(`「${setName}」保存中... ${i + 1}/${problems.length}`);
+        const freshRoot = await IDB.loadHandle();
+        const setHandle = await FS.getDir(freshRoot, setName, true);
+        await ProblemIO.save(setHandle, problems[i]);
       }
       await App.loadHome();
       Loading.hide();
