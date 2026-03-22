@@ -1192,14 +1192,26 @@ const ProblemIO = {
   async loadAll(setHandle, onProgress) {
     const dirs = await FS.listDirs(setHandle);
     const numDirs = dirs.filter(d => /^\d+$/.test(d.name));
+    const importData = await FS.readJSON(setHandle, '__import.json');
+    const total = numDirs.length + (importData ? importData.length : 0);
     let done = 0;
-    const results = await Promise.all(numDirs.map(async d => {
+    const resultMap = {};
+    // __import.json から読み込み（個別ファイルが存在する場合は上書きされる）
+    if (importData) {
+      for (const p of importData) {
+        resultMap[p.num] = { ...p, handle: setHandle };
+        done++;
+        if (onProgress) onProgress(done, total);
+      }
+    }
+    // 個別ファイルから読み込み（優先度高）
+    for (const d of numDirs) {
       const p = await this.load(d.handle, parseInt(d.name));
+      if (p) resultMap[p.num] = p;
       done++;
-      if (onProgress) onProgress(done, numDirs.length);
-      return p;
-    }));
-    return results.filter(Boolean).sort((a, b) => a.num - b.num);
+      if (onProgress) onProgress(done, total);
+    }
+    return Object.values(resultMap).filter(Boolean).sort((a, b) => a.num - b.num);
   },
 
   async load(handle, num) {
@@ -1224,8 +1236,27 @@ const ProblemIO = {
     return nums.length === 0 ? 1 : Math.max(...nums) + 1;
   },
 
+  async count(setHandle) {
+    const dirs = await FS.listDirs(setHandle);
+    const dirCount = dirs.filter(d => /^\d+$/.test(d.name)).length;
+    if (dirCount > 0) return dirCount;
+    const importData = await FS.readJSON(setHandle, '__import.json');
+    return importData ? importData.length : 0;
+  },
+
   async delete(setHandle, num) {
-    await setHandle.removeEntry(String(num).padStart(3, '0'), { recursive: true });
+    // 個別ディレクトリを削除
+    try { await setHandle.removeEntry(String(num).padStart(3, '0'), { recursive: true }); } catch { /* 存在しない場合は無視 */ }
+    // __import.json からも削除
+    const importData = await FS.readJSON(setHandle, '__import.json');
+    if (importData) {
+      const filtered = importData.filter(p => p.num !== num);
+      if (filtered.length > 0) {
+        await FS.writeJSON(setHandle, '__import.json', filtered);
+      } else {
+        try { await setHandle.removeEntry('__import.json'); } catch { /* 無視 */ }
+      }
+    }
   }
 };
 
@@ -1462,13 +1493,10 @@ const GHSync = {
         Loading.show(`「${setName}」ダウンロード中... ${i + 1}/${blobs.length}`);
         problems.push(await GitHubAPI.getBlob(blobs[i].sha));
       }
-      // フェーズ2：FS書き込み（毎回IDBからフレッシュなrootHandleを取得してstale回避）
-      for (let i = 0; i < problems.length; i++) {
-        Loading.show(`「${setName}」保存中... ${i + 1}/${problems.length}`);
-        const freshRoot = await IDB.loadHandle();
-        const setHandle = await FS.getDir(freshRoot, setName, true);
-        await ProblemIO.save(setHandle, problems[i]);
-      }
+      // フェーズ2：全問題を1ファイルに保存（FS操作2回のみ、stale問題を根本解決）
+      Loading.show(`「${setName}」保存中...`);
+      const setHandle = await FS.getDir(State.rootHandle, setName, true);
+      await FS.writeJSON(setHandle, '__import.json', problems);
       await App.loadHome();
       Loading.hide();
       showToast(`「${setName}」を取り込みました ✓`);
@@ -1644,7 +1672,7 @@ const App = {
     }
     container.innerHTML = '';
     for (const s of sets) {
-      const count = (await FS.listDirs(s.handle)).filter(d => /^\d+$/.test(d.name)).length;
+      const count = await ProblemIO.count(s.handle);
       const btn = document.createElement('button');
       btn.className = 'set-item';
       btn.innerHTML = `<span class="set-icon">📝</span><div class="set-info"><div class="set-name">${s.name}</div><div class="set-count">${count}問</div></div><span class="set-arrow">›</span>`;

@@ -22,7 +22,7 @@
 
 確認済：スマホからgithubに問題setをUploadする機能はありますか?なければ追加してほしいです（既存機能あり：セット詳細 > ⋮ メニューから可能）
 
-実装済：100問ほどのクイズセットをgithubから取り込むときにAn operation that depends on state cached in an interface object was,,,とエラーが出てしまいます　直せますか
+実装済(再)：100問ほどのクイズセットをgithubから取り込むときにAn operation that depends on state cached in an interface object was,,,とエラーが出てしまいます　直せますか
 
 ## 背景・動機
 

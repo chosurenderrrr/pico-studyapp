@@ -263,12 +263,12 @@ async uploadSet() {
 - Chrome の File System Access API の挙動として、`getDirectoryHandle({ create: true })` でサブディレクトリを作成すると、親ディレクトリハンドルのキャッシュ状態が無効化される
 - 同じ `setHandle` を使い回して100問分のサブディレクトリを連続作成すると stale 状態になりエラーが発生する
 
-### 修正方針
-- `downloadSet()` を2フェーズに分割する
-  - フェーズ1：GitHub API から全問題データをメモリに取得（FS書き込みなし）
-  - フェーズ2：毎回 `IDB.loadHandle()` でフレッシュな rootHandle を取得してから FS 書き込み
-- `State.rootHandle` は多数の書き込み後に stale になるため使用しない
-- IDB から取得したハンドルは毎回デシリアライズされた新しいオブジェクトのため stale にならない
+### 修正方針（最終）
+- ダウンロード時に100個のサブディレクトリを作成する代わりに、全問題を `setName/__import.json` に一括保存する
+- FS操作が 200回 → 2回になり stale 問題を根本解決
+- `ProblemIO.loadAll()` が `__import.json` と個別ファイルを統合読み込み（個別ファイル優先）
+- `ProblemIO.delete()` が `__import.json` からも削除
+- `ProblemIO.count()` を追加してホーム画面の問題数表示を修正
 
 ---
 
