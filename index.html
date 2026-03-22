@@ -1540,7 +1540,9 @@ const GHSync = {
       const problems = [];
       for (let i = 0; i < blobs.length; i++) {
         Loading.show(`「${setName}」ダウンロード中... ${i + 1}/${blobs.length}`);
-        problems.push(await GitHubAPI.getBlob(blobs[i].sha));
+        const problem = await GitHubAPI.getBlob(blobs[i].sha);
+        problem.num = parseInt(blobs[i].path.split('/')[2], 10); // ディレクトリ名 "001" → 1
+        problems.push(problem);
       }
       // フェーズ2：IndexedDB に保存（FS操作なし、モバイルでも確実に動作）
       Loading.show(`「${setName}」保存中...`);
