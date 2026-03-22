@@ -956,6 +956,50 @@ const IDB = {
       });
     } catch { return null; }
   },
+  async saveImport(setName, problems) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('workspace', 'readwrite');
+      tx.objectStore('workspace').put(problems, 'import:' + setName);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async loadImport(setName) {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('workspace', 'readonly');
+        const req = tx.objectStore('workspace').get('import:' + setName);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch { return null; }
+  },
+  async deleteImport(setName) {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('workspace', 'readwrite');
+        tx.objectStore('workspace').delete('import:' + setName);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch { /* 無視 */ }
+  },
+  async listImportNames() {
+    try {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('workspace', 'readonly');
+        const req = tx.objectStore('workspace').getAllKeys();
+        req.onsuccess = () => resolve(
+          (req.result || []).filter(k => typeof k === 'string' && k.startsWith('import:')).map(k => k.slice(7))
+        );
+        req.onerror = () => reject(req.error);
+      });
+    } catch { return []; }
+  },
 };
 
 // ===== Loading Overlay =====
@@ -1189,27 +1233,28 @@ const Data = {
 
 // ===== Problem I/O =====
 const ProblemIO = {
-  async loadAll(setHandle, onProgress) {
-    const dirs = await FS.listDirs(setHandle);
-    const numDirs = dirs.filter(d => /^\d+$/.test(d.name));
-    const importData = await FS.readJSON(setHandle, '__import.json');
-    const total = numDirs.length + (importData ? importData.length : 0);
-    let done = 0;
+  async loadAll(setHandle, onProgress, setName) {
     const resultMap = {};
-    // __import.json から読み込み（個別ファイルが存在する場合は上書きされる）
-    if (importData) {
-      for (const p of importData) {
-        resultMap[p.num] = { ...p, handle: setHandle };
+    let total = 0;
+    let done = 0;
+    // IDB からの読み込み（ダウンロードセット、低優先）
+    if (setName) {
+      const idbData = await IDB.loadImport(setName);
+      if (idbData) {
+        total += idbData.length;
+        idbData.forEach(p => { resultMap[p.num] = { ...p, handle: null }; });
+      }
+    }
+    if (setHandle) {
+      const dirs = await FS.listDirs(setHandle);
+      const numDirs = dirs.filter(d => /^\d+$/.test(d.name));
+      total += numDirs.length;
+      for (const d of numDirs) {
+        const p = await this.load(d.handle, parseInt(d.name));
+        if (p) resultMap[p.num] = p; // 個別ファイルが IDB より優先
         done++;
         if (onProgress) onProgress(done, total);
       }
-    }
-    // 個別ファイルから読み込み（優先度高）
-    for (const d of numDirs) {
-      const p = await this.load(d.handle, parseInt(d.name));
-      if (p) resultMap[p.num] = p;
-      done++;
-      if (onProgress) onProgress(done, total);
     }
     return Object.values(resultMap).filter(Boolean).sort((a, b) => a.num - b.num);
   },
@@ -1236,25 +1281,29 @@ const ProblemIO = {
     return nums.length === 0 ? 1 : Math.max(...nums) + 1;
   },
 
-  async count(setHandle) {
-    const dirs = await FS.listDirs(setHandle);
-    const dirCount = dirs.filter(d => /^\d+$/.test(d.name)).length;
-    if (dirCount > 0) return dirCount;
-    const importData = await FS.readJSON(setHandle, '__import.json');
-    return importData ? importData.length : 0;
+  async count(setHandle, setName) {
+    if (setHandle) {
+      const dirs = await FS.listDirs(setHandle);
+      const dirCount = dirs.filter(d => /^\d+$/.test(d.name)).length;
+      if (dirCount > 0) return dirCount;
+    }
+    if (setName) {
+      const idbData = await IDB.loadImport(setName);
+      if (idbData) return idbData.length;
+    }
+    return 0;
   },
 
-  async delete(setHandle, num) {
-    // 個別ディレクトリを削除
-    try { await setHandle.removeEntry(String(num).padStart(3, '0'), { recursive: true }); } catch { /* 存在しない場合は無視 */ }
-    // __import.json からも削除
-    const importData = await FS.readJSON(setHandle, '__import.json');
-    if (importData) {
-      const filtered = importData.filter(p => p.num !== num);
-      if (filtered.length > 0) {
-        await FS.writeJSON(setHandle, '__import.json', filtered);
-      } else {
-        try { await setHandle.removeEntry('__import.json'); } catch { /* 無視 */ }
+  async delete(setHandle, num, setName) {
+    if (setHandle) {
+      try { await setHandle.removeEntry(String(num).padStart(3, '0'), { recursive: true }); } catch { /* 無視 */ }
+    }
+    if (setName) {
+      const idbData = await IDB.loadImport(setName);
+      if (idbData) {
+        const filtered = idbData.filter(p => p.num !== num);
+        if (filtered.length > 0) await IDB.saveImport(setName, filtered);
+        else await IDB.deleteImport(setName);
       }
     }
   }
@@ -1493,10 +1542,9 @@ const GHSync = {
         Loading.show(`「${setName}」ダウンロード中... ${i + 1}/${blobs.length}`);
         problems.push(await GitHubAPI.getBlob(blobs[i].sha));
       }
-      // フェーズ2：全問題を1ファイルに保存（FS操作2回のみ、stale問題を根本解決）
+      // フェーズ2：IndexedDB に保存（FS操作なし、モバイルでも確実に動作）
       Loading.show(`「${setName}」保存中...`);
-      const setHandle = await FS.getDir(State.rootHandle, setName, true);
-      await FS.writeJSON(setHandle, '__import.json', problems);
+      await IDB.saveImport(setName, problems);
       await App.loadHome();
       Loading.hide();
       showToast(`「${setName}」を取り込みました ✓`);
@@ -1664,7 +1712,12 @@ const App = {
 
   async loadHome() {
     document.getElementById('home-title').textContent = State.rootHandle.name;
-    const sets = (await FS.listDirs(State.rootHandle)).filter(s => s.name !== 'data');
+    const fsSets = (await FS.listDirs(State.rootHandle)).filter(s => s.name !== 'data');
+    // IDB のみのダウンロードセットを追加（FSセットと重複しない名前のみ）
+    const fsNames = new Set(fsSets.map(s => s.name));
+    const idbNames = await IDB.listImportNames();
+    const idbOnlySets = idbNames.filter(n => !fsNames.has(n)).map(n => ({ name: n, handle: null }));
+    const sets = [...fsSets, ...idbOnlySets];
     const container = document.getElementById('set-list-container');
     if (sets.length === 0) {
       container.innerHTML = '<div class="empty"><div class="empty-icon">📂</div><p>クイズセットがありません<br>右下の＋ボタンから作成してください</p></div>';
@@ -1672,7 +1725,7 @@ const App = {
     }
     container.innerHTML = '';
     for (const s of sets) {
-      const count = await ProblemIO.count(s.handle);
+      const count = await ProblemIO.count(s.handle, s.name);
       const btn = document.createElement('button');
       btn.className = 'set-item';
       btn.innerHTML = `<span class="set-icon">📝</span><div class="set-info"><div class="set-name">${s.name}</div><div class="set-count">${count}問</div></div><span class="set-arrow">›</span>`;
@@ -1686,7 +1739,7 @@ const App = {
     document.getElementById('set-detail-title').textContent = s.name;
     Loading.show('読み込み中...');
     try {
-      State.problems = await ProblemIO.loadAll(s.handle, (cur, total) => Loading.setProgress(cur, total));
+      State.problems = await ProblemIO.loadAll(s.handle, (cur, total) => Loading.setProgress(cur, total), s.name);
     } finally {
       Loading.hide();
     }
@@ -1765,7 +1818,8 @@ const App = {
 
   async _deleteSet() {
     try {
-      await State.rootHandle.removeEntry(State.currentSet.name, { recursive: true });
+      try { await State.rootHandle.removeEntry(State.currentSet.name, { recursive: true }); } catch { /* IDB のみのセットは FS になし */ }
+      await IDB.deleteImport(State.currentSet.name);
       showToast('削除しました');
       Nav.back();
       await this.loadHome();
@@ -2326,8 +2380,8 @@ const Editor = {
     if (!State.currentProblem) return;
     if (!confirm('この問題を削除しますか？')) return;
     try {
-      await ProblemIO.delete(State.currentSet.handle, State.currentProblem.num);
-      State.problems = await ProblemIO.loadAll(State.currentSet.handle);
+      await ProblemIO.delete(State.currentSet.handle, State.currentProblem.num, State.currentSet.name);
+      State.problems = await ProblemIO.loadAll(State.currentSet.handle, null, State.currentSet.name);
       App.renderProblemList();
       showToast('削除しました');
       Nav.back();
